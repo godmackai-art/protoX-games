@@ -1,0 +1,237 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Shared Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Validation Blueprint: UserProfile
+    function isValidUserProfile(data) {
+      return data.uid is string
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 100
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 160
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500))
+        && (data.totalSupportedCents is int || data.totalSupportedCents is float)
+        && data.totalSupportedCents >= 0
+        && (!('lastStripeSessionId' in data) || (data.lastStripeSessionId is string && data.lastStripeSessionId.size() <= 200))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: SupportContribution
+    function isValidSupportContribution(data, userId, supportId) {
+      return data.userId is string
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && data.userId == userId
+        && data.supportId is string
+        && isValidId(data.supportId)
+        && data.supportId == supportId
+        && (data.amountCents is int || data.amountCents is float)
+        && data.amountCents in [100, 500, 1000, 10000]
+        && data.currency is string
+        && data.currency.size() <= 10
+        && data.currency == 'usd'
+        && data.stripeSessionId is string
+        && data.stripeSessionId.size() >= 1
+        && data.stripeSessionId.size() <= 200
+        && (!('stripeProductId' in data) || (data.stripeProductId is string && data.stripeProductId.size() <= 120))
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: PlaySession
+    function isValidPlaySession(data, userId, gameId) {
+      return data.userId is string
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && data.userId == userId
+        && data.gameId is string
+        && isValidId(data.gameId)
+        && data.gameId == gameId
+        && data.gameTitle is string
+        && data.gameTitle.size() >= 1
+        && data.gameTitle.size() <= 120
+        && data.category is string
+        && data.category.size() >= 1
+        && data.category.size() <= 50
+        && (data.highScore is int || data.highScore is float)
+        && data.highScore >= 0
+        && (data.playCount is int || data.playCount is float)
+        && data.playCount >= 1
+        && data.lastPlayedAt is timestamp;
+    }
+
+    // Validation Blueprint: FavoriteGame
+    function isValidFavoriteGame(data, userId, gameId) {
+      return data.userId is string
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && data.userId == userId
+        && data.gameId is string
+        && isValidId(data.gameId)
+        && data.gameId == gameId
+        && data.gameTitle is string
+        && data.gameTitle.size() >= 1
+        && data.gameTitle.size() <= 120
+        && data.category is string
+        && data.category.size() >= 1
+        && data.category.size() <= 50
+        && data.createdAt is timestamp;
+    }
+
+    // Users Collection (PII isolated to owner)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+
+      allow create: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && incoming().keys().hasAll(['uid', 'displayName', 'email', 'totalSupportedCents', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'totalSupportedCents', 'lastStripeSessionId', 'createdAt', 'updatedAt'])
+        && isValidUserProfile(incoming())
+        && incoming().totalSupportedCents == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'totalSupportedCents', 'lastStripeSessionId', 'createdAt', 'updatedAt'])
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action: Profile sync (also permits removing legacy plan/isPro fields if present)
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'photoURL', 'totalSupportedCents', 'updatedAt', 'isPro', 'plan', 'stripeSessionId'])
+          ||
+          // Action: Support payment summary update
+          incoming().diff(existing()).affectedKeys().hasOnly(['totalSupportedCents', 'lastStripeSessionId', 'updatedAt'])
+        );
+
+      allow delete: if false;
+
+      // Verified Stripe Support Receipts Subcollection
+      match /supports/{supportId} {
+        allow get: if isValidId(userId)
+          && isValidId(supportId)
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow list: if isOwner(userId)
+          && resource.data.userId == request.auth.uid;
+
+        allow create: if isVerified()
+          && isValidId(userId)
+          && isValidId(supportId)
+          && isOwner(userId)
+          && incoming().keys().hasAll(['userId', 'supportId', 'amountCents', 'currency', 'stripeSessionId', 'createdAt'])
+          && incoming().keys().hasOnly(['userId', 'supportId', 'amountCents', 'currency', 'stripeSessionId', 'stripeProductId', 'createdAt'])
+          && isValidSupportContribution(incoming(), userId, supportId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update, delete: if false;
+      }
+
+      // Play History Subcollection
+      match /playHistory/{gameId} {
+        allow get: if isValidId(userId)
+          && isValidId(gameId)
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow list: if isOwner(userId)
+          && resource.data.userId == request.auth.uid;
+
+        allow create: if isVerified()
+          && isValidId(userId)
+          && isValidId(gameId)
+          && isOwner(userId)
+          && incoming().keys().hasAll(['userId', 'gameId', 'gameTitle', 'category', 'highScore', 'playCount', 'lastPlayedAt'])
+          && incoming().keys().hasOnly(['userId', 'gameId', 'gameTitle', 'category', 'highScore', 'playCount', 'lastPlayedAt'])
+          && isValidPlaySession(incoming(), userId, gameId)
+          && incoming().lastPlayedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isVerified()
+          && isValidId(userId)
+          && isValidId(gameId)
+          && isOwner(userId)
+          && isValidPlaySession(incoming(), userId, gameId)
+          && incoming().userId == existing().userId
+          && incoming().gameId == existing().gameId
+          && incoming().lastPlayedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['highScore', 'playCount', 'lastPlayedAt', 'gameTitle', 'category'])
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow delete: if isVerified()
+          && isValidId(userId)
+          && isValidId(gameId)
+          && isOwner(userId);
+      }
+
+      // Favorites Subcollection
+      match /favorites/{gameId} {
+        allow get: if isValidId(userId)
+          && isValidId(gameId)
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow list: if isOwner(userId)
+          && resource.data.userId == request.auth.uid;
+
+        allow create: if isVerified()
+          && isValidId(userId)
+          && isValidId(gameId)
+          && isOwner(userId)
+          && incoming().keys().hasAll(['userId', 'gameId', 'gameTitle', 'category', 'createdAt'])
+          && incoming().keys().hasOnly(['userId', 'gameId', 'gameTitle', 'category', 'createdAt'])
+          && isValidFavoriteGame(incoming(), userId, gameId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if false;
+
+        allow delete: if isVerified()
+          && isValidId(userId)
+          && isValidId(gameId)
+          && isOwner(userId);
+      }
+    }
+  }
+}

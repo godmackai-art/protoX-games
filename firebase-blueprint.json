@@ -1,0 +1,202 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private authenticated player account and support contribution summary.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the player.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Player display name.",
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "description": "Player email address (PII, owner-only).",
+          "maxLength": 160
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Avatar image URL.",
+          "maxLength": 500
+        },
+        "totalSupportedCents": {
+          "type": "number",
+          "description": "Cumulative USD cents contributed via Stripe support checkout."
+        },
+        "lastStripeSessionId": {
+          "type": "string",
+          "description": "Most recent Stripe Checkout session ID or sandbox reference.",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when user profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when user profile was last updated."
+        }
+      },
+      "required": ["uid", "displayName", "email", "totalSupportedCents", "createdAt", "updatedAt"]
+    },
+    "SupportContribution": {
+      "title": "SupportContribution",
+      "description": "Verified Stripe support payment receipt saved for an authenticated player.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "supportId": {
+          "type": "string",
+          "description": "Unique support receipt identifier.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "amountCents": {
+          "type": "number",
+          "description": "Contribution amount in USD cents (100, 500, 1000, or 10000).",
+          "enum": [100, 500, 1000, 10000]
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency code (usd).",
+          "enum": ["usd"],
+          "maxLength": 10
+        },
+        "stripeSessionId": {
+          "type": "string",
+          "description": "Stripe Checkout session ID or sandbox receipt ID.",
+          "maxLength": 200
+        },
+        "stripeProductId": {
+          "type": "string",
+          "description": "Stripe Product ID associated with the checkout.",
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the support receipt was recorded."
+        }
+      },
+      "required": ["userId", "supportId", "amountCents", "currency", "stripeSessionId", "createdAt"]
+    },
+    "PlaySession": {
+      "title": "PlaySession",
+      "description": "Tracks a player's play count and high score for a specific game.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "gameId": {
+          "type": "string",
+          "description": "Unique identifier of the game in the catalog.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "gameTitle": {
+          "type": "string",
+          "description": "Human-readable game title.",
+          "maxLength": 120
+        },
+        "category": {
+          "type": "string",
+          "description": "Game genre category.",
+          "maxLength": 50
+        },
+        "highScore": {
+          "type": "number",
+          "description": "Highest score recorded by this player."
+        },
+        "playCount": {
+          "type": "number",
+          "description": "Total number of times the player launched this game."
+        },
+        "lastPlayedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last game launch."
+        }
+      },
+      "required": ["userId", "gameId", "gameTitle", "category", "highScore", "playCount", "lastPlayedAt"]
+    },
+    "FavoriteGame": {
+      "title": "FavoriteGame",
+      "description": "Bookmark entry for a player's favorite game.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "gameId": {
+          "type": "string",
+          "description": "Unique identifier of the favorited game.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "gameTitle": {
+          "type": "string",
+          "description": "Human-readable game title.",
+          "maxLength": 120
+        },
+        "category": {
+          "type": "string",
+          "description": "Game genre category.",
+          "maxLength": 50
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when favorited."
+        }
+      },
+      "required": ["userId", "gameId", "gameTitle", "category", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Stores private player profile and cumulative Stripe support total."
+    },
+    "/users/{userId}/supports/{supportId}": {
+      "schema": {
+        "$ref": "#/entities/SupportContribution"
+      },
+      "description": "Stores verified Stripe support contribution receipts owned by the user."
+    },
+    "/users/{userId}/playHistory/{gameId}": {
+      "schema": {
+        "$ref": "#/entities/PlaySession"
+      },
+      "description": "Stores per-game play counts and high scores owned by the user."
+    },
+    "/users/{userId}/favorites/{gameId}": {
+      "schema": {
+        "$ref": "#/entities/FavoriteGame"
+      },
+      "description": "Stores games bookmarked by the user."
+    }
+  }
+}

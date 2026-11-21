@@ -1,0 +1,6 @@
+{
+  "name": "protoX Games",
+  "description": "Play 2,900+ instant browser games free on protoX Games. Support the arcade anytime via Stripe ($1, $5, $10, or $100).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
