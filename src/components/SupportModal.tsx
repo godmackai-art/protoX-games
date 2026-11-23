@@ -7,7 +7,6 @@ interface SupportModalProps {
   selectedAmount: SupportAmountDollars;
   checkoutBusy: SupportAmountDollars | null;
   stripeConfigured: boolean | null;
-  stripeProductId: string | null;
   userEmail?: string | null;
   onSelectAmount: (amount: SupportAmountDollars) => void;
   onSubmitSupport: (amount: SupportAmountDollars) => void;
@@ -25,7 +24,6 @@ export function SupportModal({
   selectedAmount,
   checkoutBusy,
   stripeConfigured,
-  stripeProductId,
   userEmail,
   onSelectAmount,
   onSubmitSupport,
@@ -92,13 +90,6 @@ export function SupportModal({
                 );
               })}
             </div>
-
-            {stripeProductId && (
-              <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-xs">
-                <span className="text-[#A1A1B5]">Stripe Product ID</span>
-                <span className="font-mono font-semibold text-[#06B6D4]">{stripeProductId}</span>
-              </div>
-            )}
 
             <button
               type="button"

@@ -141,7 +141,6 @@ export async function onRequestPost({ request, env }: CFContext) {
       kind: 'support',
       url: session.url,
       sessionId: session.id,
-      productId: productId || null,
     });
   } catch (error) {
     return Response.json(

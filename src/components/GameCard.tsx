@@ -9,6 +9,7 @@ interface GameCardProps {
   stats?: PlayHistoryEntry;
   isTrending?: boolean;
   compact?: boolean;
+  variant?: 'card' | 'tile';
   index?: number;
   onSelect: (game: NormalizedGame) => void;
   onToggleFavorite: (game: NormalizedGame) => void;
@@ -20,10 +21,82 @@ export function GameCard({
   stats,
   isTrending = false,
   compact = false,
+  variant = 'card',
   index = 0,
   onSelect,
   onToggleFavorite,
 }: GameCardProps) {
+  if (variant === 'tile') {
+    return (
+      <article className="group relative overflow-hidden rounded-xl border border-white/12 bg-[#101629] transition duration-200 hover:-translate-y-1 hover:border-[#8B5CF6]/65 hover:shadow-xl hover:shadow-[#8B5CF6]/15">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => onSelect(game)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onSelect(game);
+            }
+          }}
+          className="relative aspect-[16/10] w-full cursor-pointer overflow-hidden text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6]"
+        >
+          <GameThumbnail game={game} hoverZoom />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#080B16]/95 via-[#080B16]/30 to-transparent opacity-90 transition-opacity group-hover:opacity-100" />
+
+          {/* Top Left Trending / Favorite Top Right */}
+          <div className="absolute top-2 right-2 left-2 flex items-center justify-between gap-2">
+            {isTrending ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-[#080B16]/80 px-2 py-0.5 text-[10px] font-semibold text-[#A78BFA] backdrop-blur-sm">
+                <Flame className="h-3 w-3 text-[#06B6D4]" />
+                Hot
+              </span>
+            ) : (
+              <span />
+            )}
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(game);
+              }}
+              aria-label={isFavorite ? `Remove ${game.title} from favorites` : `Favorite ${game.title}`}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg border backdrop-blur-md transition ${
+                isFavorite
+                  ? 'border-[#8B5CF6]/65 bg-[#8B5CF6]/35 text-white opacity-100'
+                  : 'border-white/15 bg-[#080B16]/70 text-white/80 opacity-0 group-hover:opacity-100 hover:text-white'
+              }`}
+            >
+              <Heart className={`h-3.5 w-3.5 ${isFavorite ? 'fill-[#A78BFA] text-[#A78BFA]' : ''}`} />
+            </button>
+          </div>
+
+          {/* Center Hover Play Affordance */}
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#06B6D4] text-white shadow-lg shadow-[#8B5CF6]/40">
+              <Play className="ml-0.5 h-4 w-4 fill-current" />
+            </span>
+          </div>
+
+          {/* Bottom Title Overlay inside media frame */}
+          <div className="absolute inset-x-0 bottom-0 p-2.5">
+            <h3 className="line-clamp-1 font-display text-xs font-bold tracking-tight text-white group-hover:text-[#A78BFA] sm:text-[13px]">
+              {game.title}
+            </h3>
+            <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-[#A1A1B5]">
+              <span className="truncate">{game.category}</span>
+              <span className="inline-flex shrink-0 items-center gap-0.5 font-mono text-amber-300">
+                <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                {game.rating}
+              </span>
+            </div>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <motion.article
       initial={{ opacity: 0, y: 12 }}
@@ -85,7 +158,7 @@ export function GameCard({
             </button>
           </div>
 
-          {/* Bottom Rating / Play Count Pill inside media frame */}
+          {/* Bottom Rating / Play Count inside media frame */}
           <div className="absolute right-3 bottom-2.5 left-3 flex items-center justify-between text-[11px] text-white/90">
             <span className="inline-flex items-center gap-1 font-mono font-medium">
               <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />

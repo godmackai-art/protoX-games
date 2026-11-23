@@ -70,7 +70,6 @@ export interface SupportReceiptEntry {
   amountCents: number;
   currency: string;
   stripeSessionId: string;
-  stripeProductId?: string;
 }
 
 export interface FeedbackEntry {

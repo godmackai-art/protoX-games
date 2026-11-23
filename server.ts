@@ -116,17 +116,20 @@ async function startServer() {
     res.send(`User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`);
   });
 
+  app.get('/google25ec37742473ff7b.html', (_req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send('google-site-verification: google25ec37742473ff7b.html');
+  });
+
   app.get('/api/stripe/config', (_req, res) => {
     res.json({
       configured: Boolean(stripeClient),
-      productId: defaultStripeProductId || null,
       tiers: [1, 10, 100].map((amount) => {
         const tier = SUPPORT_TIERS[amount as SupportAmountDollars];
         return {
           amountDollars: tier.amountDollars,
           amountCents: tier.unitAmount,
           label: tier.label,
-          productId: tier.productId || null,
         };
       }),
     });
@@ -217,7 +220,6 @@ async function startServer() {
         kind: 'support',
         url: session.url,
         sessionId: session.id,
-        productId: tier.productId || null,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create Stripe session.';
@@ -248,7 +250,6 @@ async function startServer() {
         amountCents,
         amountDollars,
         currency: session.currency || 'usd',
-        productId: session.metadata?.productId || defaultStripeProductId || null,
         uid: session.client_reference_id || session.metadata?.uid || null,
         sessionId: session.id,
       });

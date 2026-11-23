@@ -55,7 +55,6 @@ export async function onRequestGet({ request, env }: CFContext) {
       amountCents,
       amountDollars,
       currency: session.currency || 'usd',
-      productId: session.metadata?.productId || env.STRIPE_PRODUCT_ID?.trim() || null,
       uid: session.client_reference_id || session.metadata?.uid || null,
       sessionId: session.id,
     });

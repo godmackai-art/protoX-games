@@ -31,7 +31,6 @@ interface ProfileViewProps {
   authLoading: boolean;
   checkoutBusy: SupportAmountDollars | null;
   stripeConfigured: boolean | null;
-  stripeProductId: string | null;
   onGoogleSignIn: () => void;
   onSignOut: () => void;
   onSupportAmount: (amount: SupportAmountDollars) => void;
@@ -64,7 +63,6 @@ export function ProfileView({
   authLoading,
   checkoutBusy,
   stripeConfigured,
-  stripeProductId,
   onGoogleSignIn,
   onSignOut,
   onSupportAmount,
@@ -162,11 +160,6 @@ export function ProfileView({
               Choose a Support Tier (1$, 10$, 100$)
             </h2>
           </div>
-          {stripeProductId && (
-            <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-1 font-mono text-[11px] text-[#06B6D4]">
-              Product ID: {stripeProductId}
-            </span>
-          )}
         </div>
 
         <p className="mt-1.5 text-xs text-[#A1A1B5]">

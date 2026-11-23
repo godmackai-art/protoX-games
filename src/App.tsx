@@ -197,6 +197,7 @@ function ProtoXGamesApp() {
 
   // Player & UI Preferences
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [preferences, setPreferences] = useState<AppPreferences>({
     ambientEffects: true,
     compactCards: false,
@@ -208,7 +209,6 @@ function ProtoXGamesApp() {
   const [selectedSupportAmount, setSelectedSupportAmount] = useState<SupportAmountDollars>(1);
   const [reminderDismissed, setReminderDismissed] = useState(false);
   const [stripeConfigured, setStripeConfigured] = useState<boolean | null>(null);
-  const [stripeProductId, setStripeProductId] = useState<string | null>(null);
   const [supportCheckoutBusy, setSupportCheckoutBusy] = useState<SupportAmountDollars | null>(null);
 
   // Developer Tools Modals
@@ -275,6 +275,10 @@ function ProtoXGamesApp() {
       pageTitle = 'Trending Web Games – ProtoX Games';
     } else if (route.view === 'leaderboard') {
       pageTitle = 'Top Games Leaderboard – ProtoX Games';
+    } else if (route.view === 'favorites') {
+      pageTitle = 'Favorite Browser Games – ProtoX Games';
+    } else if (route.view === 'recent') {
+      pageTitle = 'Recently Played Games – ProtoX Games';
     } else if (route.view === 'profile') {
       pageTitle = 'Player Profile & Support – ProtoX Games';
     }
@@ -361,6 +365,16 @@ function ProtoXGamesApp() {
       (el) => ((el as HTMLMetaElement).content = pageDesc)
     );
 
+    upsertHeadTag(
+      'meta[name="twitter:image"]',
+      () => {
+        const m = document.createElement('meta');
+        m.name = 'twitter:image';
+        return m;
+      },
+      (el) => ((el as HTMLMetaElement).content = pageImage)
+    );
+
     const gscToken = (import.meta.env.VITE_GSC_VERIFICATION as string | undefined)?.trim();
     if (gscToken) {
       upsertHeadTag(
@@ -406,9 +420,8 @@ function ProtoXGamesApp() {
   useEffect(() => {
     fetch('/api/stripe/config')
       .then((res) => res.json())
-      .then((data: { configured?: boolean; productId?: string | null }) => {
+      .then((data: { configured?: boolean }) => {
         setStripeConfigured(Boolean(data.configured));
-        setStripeProductId(data.productId || null);
       })
       .catch(() => setStripeConfigured(false));
   }, []);
@@ -541,7 +554,6 @@ function ProtoXGamesApp() {
             amountCents: Number(data.amountCents || 0),
             currency: data.currency || 'usd',
             stripeSessionId: data.stripeSessionId || '',
-            stripeProductId: data.stripeProductId,
           };
         });
         setSupportReceipts(list);
@@ -601,7 +613,6 @@ function ProtoXGamesApp() {
             paid?: boolean;
             amountCents?: number;
             amountDollars?: number;
-            productId?: string | null;
             sessionId?: string;
           }) => {
             if (!data.paid) return;
@@ -622,7 +633,6 @@ function ProtoXGamesApp() {
                     amountCents,
                     currency: 'usd',
                     stripeSessionId: safeSessionId,
-                    ...(data.productId ? { stripeProductId: data.productId.slice(0, 120) } : {}),
                     createdAt: serverTimestamp(),
                   });
                   await updateDoc(doc(db, 'users', user.uid), {
@@ -848,7 +858,7 @@ function ProtoXGamesApp() {
         </div>
       )}
 
-      {/* Floating Frosted-Glass Top Navigation Bar */}
+      {/* Top Navigation Bar */}
       {!playerFullscreen && (
         <TopNavbar
           activeView={route.view}
@@ -859,6 +869,8 @@ function ProtoXGamesApp() {
           authLoading={authLoading}
           favoritesCount={favoritesCount}
           playHistory={playHistory}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed((c) => !c)}
           onSearchChange={(q) => setSearchQuery(q)}
           onNavigateView={navigateView}
           onSelectGame={openGameRoute}
@@ -869,7 +881,7 @@ function ProtoXGamesApp() {
 
       {/* System Notice Banner */}
       {notice && !playerFullscreen && (
-        <div className="relative z-20 mx-auto mt-3 max-w-[1480px] px-3 sm:px-6">
+        <div className="relative z-20 mx-auto mt-3 max-w-[1480px] px-3 sm:px-6 lg:max-w-none lg:px-6">
           <div
             className={`glass-panel flex items-center justify-between gap-4 rounded-2xl px-4 py-3 text-xs sm:text-sm ${
               notice.type === 'error'
@@ -890,24 +902,27 @@ function ProtoXGamesApp() {
         </div>
       )}
 
-      {/* Main Responsive Workspace */}
+      {/* Main Responsive Workspace (Mobile boxed/bottom-nav, Desktop CrazyGames docked rail + canvas) */}
       <div
-        className={`relative z-10 mx-auto flex max-w-[1480px] gap-6 ${
-          playerFullscreen ? '' : 'px-3 pt-5 sm:px-6'
+        className={`relative z-10 mx-auto flex max-w-[1480px] gap-6 lg:max-w-none lg:gap-0 ${
+          playerFullscreen ? '' : 'px-3 pt-5 sm:px-6 lg:px-0 lg:pt-0'
         }`}
       >
         {!playerFullscreen && (
           <Sidebar
             activeView={route.view}
+            activeGenre={activeGenre}
+            collapsed={sidebarCollapsed}
             profile={profile}
             favoritesCount={favoritesCount}
             recentCount={Object.keys(playHistory).length}
             onNavigateView={navigateView}
+            onSelectGenre={handleBrowseGenre}
             onOpenSupport={() => openSupportWithAmount(1)}
           />
         )}
 
-        <main className="min-w-0 flex-1">
+        <main className={`min-w-0 flex-1 ${playerFullscreen ? '' : 'lg:px-6 lg:py-5'}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={`${route.view}-${route.slug || ''}`}
@@ -924,10 +939,12 @@ function ProtoXGamesApp() {
                       totalGames={games.length}
                       totalCategories={totalCategories}
                       featuredGame={featuredGame}
+                      showcaseGames={(discoveryShelves[0]?.games || games).slice(0, 8)}
                       favoritesCount={favoritesCount}
                       totalSessions={totalSessions}
                       onExploreGames={() => navigateView('games')}
                       onDiscoverTrending={() => navigateView('trending')}
+                      onSelectGenre={handleBrowseGenre}
                       onLaunchFeatured={openGameRoute}
                     />
                   )}
@@ -1049,7 +1066,6 @@ function ProtoXGamesApp() {
                   authLoading={authLoading}
                   checkoutBusy={supportCheckoutBusy}
                   stripeConfigured={stripeConfigured}
-                  stripeProductId={stripeProductId}
                   onGoogleSignIn={() => void handleGoogleSignIn()}
                   onSignOut={() => void handleSignOut()}
                   onSupportAmount={(amt) => void handleStripeSupport(amt)}
@@ -1133,7 +1149,6 @@ function ProtoXGamesApp() {
         selectedAmount={selectedSupportAmount}
         checkoutBusy={supportCheckoutBusy}
         stripeConfigured={stripeConfigured}
-        stripeProductId={stripeProductId}
         userEmail={user?.email}
         onSelectAmount={setSelectedSupportAmount}
         onSubmitSupport={(amt) => void handleStripeSupport(amt)}

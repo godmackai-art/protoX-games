@@ -23,7 +23,7 @@ export function InfiniteGameGrid({
   playHistory,
   onSelectGame,
   onToggleFavorite,
-  batchSize = 28,
+  batchSize = 30,
   isLoading = false,
   compactCards = false,
   emptyTitle = 'No matching games found',
@@ -59,8 +59,8 @@ export function InfiniteGameGrid({
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {Array.from({ length: 8 }).map((_, i) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+        {Array.from({ length: 10 }).map((_, i) => (
           <GameCardSkeleton key={i} />
         ))}
       </div>
@@ -89,7 +89,7 @@ export function InfiniteGameGrid({
 
   return (
     <div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
         {renderedGames.map((game, idx) => (
           <GameCard
             key={game.id}

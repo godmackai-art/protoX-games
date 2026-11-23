@@ -3,6 +3,7 @@ import {
   Bell,
   Gamepad2,
   Heart,
+  Menu,
   Play,
   Search,
   User as UserIcon,
@@ -22,6 +23,8 @@ interface TopNavbarProps {
   authLoading: boolean;
   favoritesCount: number;
   playHistory: Record<string, PlayHistoryEntry>;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
   onSearchChange: (q: string) => void;
   onNavigateView: (view: AppViewMode) => void;
   onSelectGame: (game: NormalizedGame) => void;
@@ -29,16 +32,7 @@ interface TopNavbarProps {
   onGoogleSignIn: () => void;
 }
 
-const CENTER_LINKS: { id: AppViewMode; label: string }[] = [
-  { id: 'home', label: 'Home' },
-  { id: 'games', label: 'Explore' },
-  { id: 'categories', label: 'Categories' },
-  { id: 'trending', label: 'Trending' },
-  { id: 'recent', label: 'Recently Played' },
-];
-
 export function TopNavbar({
-  activeView,
   games,
   searchQuery,
   user,
@@ -46,6 +40,8 @@ export function TopNavbar({
   authLoading,
   favoritesCount,
   playHistory,
+  sidebarCollapsed,
+  onToggleSidebar,
   onSearchChange,
   onNavigateView,
   onSelectGame,
@@ -116,134 +112,121 @@ export function TopNavbar({
   }, [totalSupportedDollars, recentPlays, games.length, favoritesCount, onOpenSupport, onNavigateView]);
 
   return (
-    <header className="sticky top-0 z-40 px-3 pt-3 sm:px-6">
-      <div className="glass-panel-deep mx-auto flex h-16 max-w-[1480px] items-center justify-between gap-3 rounded-2xl px-3.5 sm:px-5">
-        {/* Left: Futuristic Logo & Wordmark */}
-        <a
-          href="/"
-          onClick={(e) => {
-            e.preventDefault();
-            onNavigateView('home');
-          }}
-          className="flex shrink-0 items-center gap-2.5 whitespace-nowrap"
+    <header className="sticky top-0 z-40 px-3 pt-3 sm:px-6 lg:px-0 lg:pt-0">
+      <div className="glass-panel-deep mx-auto flex h-16 max-w-[1480px] items-center justify-between gap-3 rounded-2xl px-3.5 sm:px-5 lg:max-w-none lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b lg:border-white/10 lg:px-5">
+        {/* Left Zone: Desktop Sidebar Toggle + ProtoX Logo & Wordmark */}
+        <div className="flex shrink-0 items-center gap-2.5">
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            aria-label={sidebarCollapsed ? 'Expand sidebar navigation' : 'Collapse sidebar navigation'}
+            className="hidden h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#A1A1B5] transition hover:border-white/25 hover:text-white lg:flex"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateView('home');
+            }}
+            className="flex shrink-0 items-center gap-2.5 whitespace-nowrap"
+          >
+            <div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-[#8B5CF6]/45 bg-[#101629] shadow-md shadow-[#8B5CF6]/25">
+              <img
+                src="/favicon.webp"
+                alt="ProtoX Games icon"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <span className="font-display text-base font-bold tracking-tight text-white sm:text-lg">
+              ProtoX <span className="bg-gradient-to-r from-[#A78BFA] to-[#06B6D4] bg-clip-text text-transparent">Games</span>
+            </span>
+          </a>
+        </div>
+
+        {/* Center Zone: CrazyGames-Style Wide Centered Search Bar on Desktop */}
+        <div
+          ref={searchContainerRef}
+          className="relative hidden w-full max-w-[440px] md:block lg:mx-auto lg:flex-1"
         >
-          <div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-[#8B5CF6]/45 bg-[#101629] shadow-md shadow-[#8B5CF6]/25">
-            <img
-              src="/favicon.webp"
-              alt="ProtoX Games icon"
-              className="h-full w-full object-cover"
-            />
-          </div>
-          <span className="font-display text-base font-bold tracking-tight text-white sm:text-lg">
-            ProtoX <span className="bg-gradient-to-r from-[#A78BFA] to-[#06B6D4] bg-clip-text text-transparent">Games</span>
-          </span>
-        </a>
+          <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-[#A1A1B5]" />
+          <input
+            type="search"
+            value={searchQuery}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setTimeout(() => setSearchFocused(false), 180)}
+            onChange={(e) => {
+              onSearchChange(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchQuery.trim()) {
+                setSearchFocused(false);
+                onNavigateView('games');
+              }
+            }}
+            placeholder={`Search ${games.length.toLocaleString()} instant browser games...`}
+            className="glass-input h-10 w-full rounded-full pr-9 pl-10 text-xs text-white placeholder:text-[#A1A1B5] focus:border-[#8B5CF6]/70 focus:outline-none"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => onSearchChange('')}
+              aria-label="Clear search"
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-[#A1A1B5] hover:text-white"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
 
-        {/* Center Navigation Links */}
-        <nav aria-label="Primary navigation" className="hidden items-center gap-1 xl:flex">
-          {CENTER_LINKS.map((link) => {
-            const isActive =
-              activeView === link.id || (link.id === 'home' && activeView === 'discover');
-            return (
-              <button
-                key={link.id}
-                type="button"
-                onClick={() => onNavigateView(link.id)}
-                className={`relative rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-colors ${
-                  isActive ? 'text-white' : 'text-[#A1A1B5] hover:text-white'
-                }`}
+          <AnimatePresence>
+            {searchFocused && suggestions.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                className="glass-panel-deep absolute top-12 right-0 left-0 z-50 overflow-hidden rounded-2xl p-1.5"
               >
-                {isActive && (
-                  <motion.span
-                    layoutId="topbar-active-pill"
-                    transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                    className="absolute inset-0 rounded-xl border border-white/15 bg-white/10"
-                  />
-                )}
-                <span className="relative z-10">{link.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Right: Search Field + Notifications + Support + Profile */}
-        <div className="flex flex-1 items-center justify-end gap-2 sm:gap-2.5 xl:flex-none">
-          {/* Search Bar with Live Dropdown Suggestions */}
-          <div ref={searchContainerRef} className="relative hidden w-full max-w-[260px] md:block lg:w-64">
-            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[#A1A1B5]" />
-            <input
-              type="search"
-              value={searchQuery}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setTimeout(() => setSearchFocused(false), 180)}
-              onChange={(e) => {
-                onSearchChange(e.target.value);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && searchQuery.trim()) {
-                  setSearchFocused(false);
-                  onNavigateView('games');
-                }
-              }}
-              placeholder={`Search ${games.length.toLocaleString()} games...`}
-              className="glass-input h-10 w-full rounded-xl pr-8 pl-9 text-xs text-white placeholder:text-[#A1A1B5] focus:border-[#8B5CF6]/70 focus:outline-none"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => onSearchChange('')}
-                aria-label="Clear search"
-                className="absolute top-1/2 right-2.5 -translate-y-1/2 text-[#A1A1B5] hover:text-white"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-
-            <AnimatePresence>
-              {searchFocused && suggestions.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 4 }}
-                  className="glass-panel-deep absolute top-12 right-0 left-0 z-50 overflow-hidden rounded-2xl p-1.5"
-                >
-                  {suggestions.map((game) => (
-                    <button
-                      key={game.id}
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setSearchFocused(false);
-                        onSelectGame(game);
-                      }}
-                      className="flex w-full items-center gap-2.5 rounded-xl p-2 text-left transition hover:bg-white/10"
-                    >
-                      <div className="h-9 w-12 shrink-0 overflow-hidden rounded-lg bg-[#080B16]">
-                        <GameThumbnail game={game} hoverZoom={false} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-white">{game.title}</p>
-                        <p className="truncate text-[11px] text-[#A1A1B5]">{game.category}</p>
-                      </div>
-                      <Play className="h-3.5 w-3.5 shrink-0 text-[#06B6D4]" />
-                    </button>
-                  ))}
+                {suggestions.map((game) => (
                   <button
+                    key={game.id}
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       setSearchFocused(false);
-                      onNavigateView('games');
+                      onSelectGame(game);
                     }}
-                    className="mt-1 w-full rounded-xl border-t border-white/10 py-2 text-center text-[11px] font-semibold text-[#A78BFA] hover:bg-white/5"
+                    className="flex w-full items-center gap-2.5 rounded-xl p-2 text-left transition hover:bg-white/10"
                   >
-                    See all results in Explore
+                    <div className="h-9 w-12 shrink-0 overflow-hidden rounded-lg bg-[#080B16]">
+                      <GameThumbnail game={game} hoverZoom={false} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-white">{game.title}</p>
+                      <p className="truncate text-[11px] text-[#A1A1B5]">{game.category}</p>
+                    </div>
+                    <Play className="h-3.5 w-3.5 shrink-0 text-[#06B6D4]" />
                   </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                ))}
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setSearchFocused(false);
+                    onNavigateView('games');
+                  }}
+                  className="mt-1 w-full rounded-xl border-t border-white/10 py-2 text-center text-[11px] font-semibold text-[#A78BFA] hover:bg-white/5"
+                >
+                  See all results in Explore
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
+        {/* Right Zone: Search (mobile), Favorites quick shortcut, Notifications, Support, Profile */}
+        <div className="flex items-center justify-end gap-2 sm:gap-2.5">
           {/* Mobile Search Icon Button */}
           <button
             type="button"
@@ -252,6 +235,17 @@ export function TopNavbar({
             className="glass-card flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#A1A1B5] hover:text-white md:hidden"
           >
             <Search className="h-4 w-4" />
+          </button>
+
+          {/* Desktop Quick Favorites Button */}
+          <button
+            type="button"
+            onClick={() => onNavigateView('favorites')}
+            aria-label="Saved favorite games"
+            className="glass-card hidden h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-[#A1A1B5] hover:text-white lg:inline-flex"
+          >
+            <Heart className={`h-4 w-4 ${favoritesCount > 0 ? 'fill-[#A78BFA] text-[#A78BFA]' : ''}`} />
+            {favoritesCount > 0 && <span className="font-mono text-white">{favoritesCount}</span>}
           </button>
 
           {/* Notifications Popover Trigger */}
@@ -263,7 +257,6 @@ export function TopNavbar({
               className="glass-card relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#A1A1B5] hover:text-white"
             >
               <Bell className="h-4 w-4" />
-              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[#06B6D4]" />
             </button>
 
             <AnimatePresence>
@@ -312,7 +305,7 @@ export function TopNavbar({
             </AnimatePresence>
           </div>
 
-          {/* Support Button (Replaces PRO button) */}
+          {/* Support Button */}
           <button
             type="button"
             onClick={onOpenSupport}
