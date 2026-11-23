@@ -32,7 +32,7 @@
         },
         "lastStripeSessionId": {
           "type": "string",
-          "description": "Most recent Stripe Checkout session ID or sandbox reference.",
+          "description": "Most recent Stripe Checkout session ID.",
           "maxLength": 200
         },
         "createdAt": {
@@ -67,8 +67,8 @@
         },
         "amountCents": {
           "type": "number",
-          "description": "Contribution amount in USD cents (100, 500, 1000, or 10000).",
-          "enum": [100, 500, 1000, 10000]
+          "description": "Contribution amount in USD cents (100, 1000, or 10000).",
+          "enum": [100, 1000, 10000]
         },
         "currency": {
           "type": "string",
@@ -78,7 +78,7 @@
         },
         "stripeSessionId": {
           "type": "string",
-          "description": "Stripe Checkout session ID or sandbox receipt ID.",
+          "description": "Stripe Checkout session ID.",
           "maxLength": 200
         },
         "stripeProductId": {
@@ -93,6 +93,57 @@
         }
       },
       "required": ["userId", "supportId", "amountCents", "currency", "stripeSessionId", "createdAt"]
+    },
+    "FeedbackComment": {
+      "title": "FeedbackComment",
+      "description": "Feedback or comment submitted by a player for stevenevel003@gmail.com.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "feedbackId": {
+          "type": "string",
+          "description": "Unique feedback entry identifier.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Sender display name.",
+          "maxLength": 100
+        },
+        "replyEmail": {
+          "type": "string",
+          "description": "Sender contact email address.",
+          "maxLength": 160
+        },
+        "recipientEmail": {
+          "type": "string",
+          "description": "Feedback destination email.",
+          "enum": ["stevenevel003@gmail.com"],
+          "maxLength": 160
+        },
+        "gameTitle": {
+          "type": "string",
+          "description": "Optional game title referenced in the comment.",
+          "maxLength": 120
+        },
+        "message": {
+          "type": "string",
+          "description": "Feedback comment text.",
+          "maxLength": 2000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the comment was saved."
+        }
+      },
+      "required": ["userId", "feedbackId", "authorName", "replyEmail", "recipientEmail", "message", "createdAt"]
     },
     "PlaySession": {
       "title": "PlaySession",
@@ -185,6 +236,12 @@
         "$ref": "#/entities/SupportContribution"
       },
       "description": "Stores verified Stripe support contribution receipts owned by the user."
+    },
+    "/users/{userId}/feedback/{feedbackId}": {
+      "schema": {
+        "$ref": "#/entities/FeedbackComment"
+      },
+      "description": "Stores feedback comments sent by the user to stevenevel003@gmail.com."
     },
     "/users/{userId}/playHistory/{gameId}": {
       "schema": {

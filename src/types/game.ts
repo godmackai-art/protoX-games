@@ -50,9 +50,11 @@ export interface NormalizedGame {
     vertical: boolean;
   };
   inGamePurchases?: string;
+  rating: string;
+  catalogIndex: number;
 }
 
-export type SupportAmountDollars = 1 | 5 | 10 | 100;
+export type SupportAmountDollars = 1 | 10 | 100;
 
 export interface UserProfileDoc {
   uid: string;
@@ -71,10 +73,41 @@ export interface SupportReceiptEntry {
   stripeProductId?: string;
 }
 
+export interface FeedbackEntry {
+  feedbackId: string;
+  authorName: string;
+  replyEmail: string;
+  recipientEmail: string;
+  gameTitle?: string;
+  message: string;
+}
+
 export interface PlayHistoryEntry {
   gameId: string;
   gameTitle?: string;
   category?: string;
   highScore: number;
   playCount: number;
+}
+
+export type AppViewMode =
+  | 'home'
+  | 'discover'
+  | 'games'
+  | 'categories'
+  | 'trending'
+  | 'favorites'
+  | 'recent'
+  | 'leaderboard'
+  | 'settings'
+  | 'profile'
+  | 'game';
+
+export type GameSortOrder = 'popularity' | 'newest' | 'az';
+export type GameTypeFilter = 'all' | '3d' | 'mobile' | 'landscape' | 'portrait';
+
+export interface AppPreferences {
+  ambientEffects: boolean;
+  compactCards: boolean;
+  audioHints: boolean;
 }

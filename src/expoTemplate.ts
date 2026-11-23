@@ -53,7 +53,7 @@ const auth = getAuth(app);
 
 type TabKey = 'home' | 'games' | 'profile';
 type ViewportSize = 'part' | 'fullscreen';
-const SUPPORT_AMOUNTS = [1, 5, 10, 100] as const;
+const SUPPORT_AMOUNTS = [1, 10, 100] as const;
 
 export default function ProtoXGamesScreen() {
   const [tab, setTab] = useState<TabKey>('home');
@@ -63,6 +63,7 @@ export default function ProtoXGamesScreen() {
   const [selectedGame, setSelectedGame] = useState<any | null>(null);
   const [viewportSize, setViewportSize] = useState<ViewportSize>('part');
   const [showSupportModal, setShowSupportModal] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState('');
 
   useEffect(() => {
     return onAuthStateChanged(auth, (fbUser) => {
@@ -104,7 +105,7 @@ export default function ProtoXGamesScreen() {
     setViewportSize('part');
   };
 
-  const startStripeSupport = async (amount: 1 | 5 | 10 | 100) => {
+  const startStripeSupport = async (amount: 1 | 10 | 100) => {
     const res = await fetch(\`\${process.env.EXPO_PUBLIC_API_URL}/api/stripe/create-checkout-session\`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -112,6 +113,13 @@ export default function ProtoXGamesScreen() {
     });
     const data = await res.json();
     if (data.url) await Linking.openURL(data.url);
+  };
+
+  const sendFeedbackEmail = async () => {
+    const subject = encodeURIComponent('protoX Games Feedback');
+    const body = encodeURIComponent(feedbackMsg.trim());
+    await Linking.openURL(\`mailto:stevenevel003@gmail.com?subject=\${subject}&body=\${body}\`);
+    setFeedbackMsg('');
   };
 
   return (
@@ -127,7 +135,7 @@ export default function ProtoXGamesScreen() {
 
       <Pressable style={styles.reminderBanner} onPress={() => setShowSupportModal(true)}>
         <Text style={styles.reminderText}>
-          Enjoying free games with zero ads? Tap to support with 1$, 5$, 10$, or 100$ via Stripe.
+          Enjoying free games with zero ads? Tap to support with 1$, 10$, or 100$ via Stripe.
         </Text>
       </Pressable>
 
@@ -139,6 +147,17 @@ export default function ProtoXGamesScreen() {
             onPress={() => (user ? signOut(auth) : signInWithPopup(auth, new GoogleAuthProvider()))}
           >
             <Text style={styles.supportBtnText}>{user ? 'Sign Out' : 'Sign In with Google'}</Text>
+          </Pressable>
+          <Text style={[styles.sectionTitle, { marginTop: 18 }]}>Feedback (stevenevel003@gmail.com)</Text>
+          <TextInput
+            value={feedbackMsg}
+            onChangeText={setFeedbackMsg}
+            placeholder="Write a comment or feedback..."
+            placeholderTextColor="#64748B"
+            style={styles.search}
+          />
+          <Pressable style={styles.supportBtn} onPress={sendFeedbackEmail}>
+            <Text style={styles.supportBtnText}>Send Feedback</Text>
           </Pressable>
         </ScrollView>
       ) : (
@@ -211,7 +230,7 @@ export default function ProtoXGamesScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Support Modal (1$, 5$, 10$, 100$ via Stripe Product ID) */}
+      {/* Support Modal (1$, 10$, 100$ via Stripe Product ID) */}
       <Modal visible={showSupportModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>

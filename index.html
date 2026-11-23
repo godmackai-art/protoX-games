@@ -3,26 +3,78 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>protoX Games — Instant Web Games Arcade</title>
+    <title>ProtoX Games – Play 2,900+ Free Instant Browser Games</title>
     <meta
       name="description"
-      content="Play 2,900+ instant browser games free on protoX Games. Support the arcade anytime via Stripe ($1, $5, $10, or $100)."
+      content="Play 2,900+ free HTML5 and WebGL games instantly on ProtoX Games. Zero downloads, zero ads—just pure browser gaming across action, racing, puzzle, and arcade."
     />
-    <meta property="og:title" content="protoX Games — Instant Web Games Arcade" />
+    <meta
+      name="robots"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.webp" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#080B16" />
+
+    <!-- OpenGraph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ProtoX Games" />
+    <meta property="og:title" content="ProtoX Games – Play 2,900+ Free Instant Browser Games" />
     <meta
       property="og:description"
-      content="Play 2,900+ instant browser games free on protoX Games. Support the arcade anytime via Stripe ($1, $5, $10, or $100)."
+      content="Play 2,900+ free HTML5 and WebGL games instantly on ProtoX Games. Zero downloads, zero ads—just pure browser gaming across action, racing, puzzle, and arcade."
     />
-    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp" />
+
+    <!-- Twitter / X Cards -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ProtoX Games – Play 2,900+ Free Instant Browser Games" />
+    <meta
+      name="twitter:description"
+      content="Play 2,900+ free HTML5 and WebGL games instantly on ProtoX Games. Zero downloads, zero ads—just pure browser gaming across action, racing, puzzle, and arcade."
+    />
+    <meta name="twitter:image" content="/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp" />
+
+    <!-- Schema.org Structured Data for Google Search Console -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "name": "ProtoX Games",
+            "description": "Instant browser gaming arcade featuring 2,900+ free HTML5 and WebGL games with zero ads and zero downloads.",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": "/games?q={search_term_string}",
+              "query-input": "required name=search_term_string"
+            }
+          },
+          {
+            "@type": "WebApplication",
+            "name": "ProtoX Games",
+            "applicationCategory": "GameApplication",
+            "operatingSystem": "All",
+            "description": "Play 2,900+ free HTML5 and WebGL games instantly on ProtoX Games with zero downloads and zero ads.",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            }
+          }
+        ]
+      }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
   </head>
-  <body class="bg-[#070A0F] text-slate-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
+  <body class="bg-[#080B16] text-white antialiased selection:bg-[#8B5CF6]/35 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

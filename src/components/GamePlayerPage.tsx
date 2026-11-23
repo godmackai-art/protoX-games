@@ -2,42 +2,52 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Check,
-  Columns2,
-  Copy,
+  Expand,
   ExternalLink,
-  Globe,
   Heart,
-  HelpCircle,
-  Maximize2,
+  Loader2,
   Minimize2,
-  Monitor,
-  MoreHorizontal,
   RectangleHorizontal,
-  RotateCw,
+  RotateCcw,
   Share2,
-  Smartphone,
+  Star,
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import type { NormalizedGame, PlayHistoryEntry, SupportAmountDollars } from '../types/game';
+import type {
+  FeedbackEntry,
+  NormalizedGame,
+  PlayHistoryEntry,
+  SupportAmountDollars,
+} from '../types/game';
 import { GameCard } from './GameCard';
+import { FeedbackSection } from './FeedbackSection';
 import { SupportReminderBanner } from './SupportReminderBanner';
 
-export type ViewportMode = 'part' | 'theater' | 'fullscreen';
+type ViewportMode = 'standard' | 'part-screen' | 'fullscreen';
 
 interface GamePlayerPageProps {
   game: NormalizedGame;
   allGames: NormalizedGame[];
   favorites: Record<string, boolean>;
   playHistory: Record<string, PlayHistoryEntry>;
+  feedbackComments: FeedbackEntry[];
+  userDisplayName: string;
+  userEmail: string;
   reminderDismissed: boolean;
   onDismissReminder: () => void;
   onBack: () => void;
   onSelectGame: (game: NormalizedGame) => void;
   onSelectGenre: (genre: string) => void;
   onToggleFavorite: (game: NormalizedGame) => void;
-  onOpenSupportModal: (amount?: SupportAmountDollars) => void;
+  onOpenSupportModal: (amount: SupportAmountDollars) => void;
   onFullscreenChange: (isFullscreen: boolean) => void;
+  onSaveFeedback: (entry: {
+    authorName: string;
+    replyEmail: string;
+    gameTitle?: string;
+    message: string;
+  }) => Promise<void>;
 }
 
 export function GamePlayerPage({
@@ -45,6 +55,9 @@ export function GamePlayerPage({
   allGames,
   favorites,
   playHistory,
+  feedbackComments,
+  userDisplayName,
+  userEmail,
   reminderDismissed,
   onDismissReminder,
   onBack,
@@ -53,529 +66,416 @@ export function GamePlayerPage({
   onToggleFavorite,
   onOpenSupportModal,
   onFullscreenChange,
+  onSaveFeedback,
 }: GamePlayerPageProps) {
-  const [viewportMode, setViewportMode] = useState<ViewportMode>('part');
-  const [muted, setMuted] = useState(false);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [viewportMode, setViewportMode] = useState<ViewportMode>('standard');
   const [reloadNonce, setReloadNonce] = useState(0);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [showControlsPanel, setShowControlsPanel] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-
-  const stageContainerRef = useRef<HTMLDivElement | null>(null);
-  const moreMenuRef = useRef<HTMLDivElement | null>(null);
-  const controlsSectionRef = useRef<HTMLDivElement | null>(null);
-
-  const isFav = Boolean(favorites[game.id]);
-  const stats = playHistory[game.id];
-
-  // Reset per-game UI state when slug changes
-  useEffect(() => {
-    setReloadNonce(0);
-    setMoreOpen(false);
-    setShowControlsPanel(false);
-    setViewportMode('part');
-    onFullscreenChange(false);
-  }, [game.id, onFullscreenChange]);
-
-  // Sync native browser fullscreen exit (e.g., user presses Esc)
-  useEffect(() => {
-    const handleNativeFullscreen = () => {
-      const activeEl = document.fullscreenElement;
-      if (!activeEl && viewportMode === 'fullscreen') {
-        setViewportMode('part');
-        onFullscreenChange(false);
-      }
-    };
-    document.addEventListener('fullscreenchange', handleNativeFullscreen);
-    return () => document.removeEventListener('fullscreenchange', handleNativeFullscreen);
-  }, [viewportMode, onFullscreenChange]);
-
-  // Close More Options popover when clicking outside
-  useEffect(() => {
-    if (!moreOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
-        setMoreOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [moreOpen]);
-
-  // Esc exits CSS fullscreen fallback too
-  useEffect(() => {
-    if (viewportMode !== 'fullscreen') return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        void applyViewportMode('part');
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  });
-
-  const applyViewportMode = async (mode: ViewportMode) => {
-    setViewportMode(mode);
-    onFullscreenChange(mode === 'fullscreen');
-
-    if (mode === 'fullscreen') {
-      const el = stageContainerRef.current;
-      if (el && el.requestFullscreen) {
-        try {
-          await el.requestFullscreen();
-        } catch {
-          // Preview iframe or browser blocked native fullscreen; CSS fixed fullscreen fallback handles it seamlessly
-        }
-      }
-    } else if (document.fullscreenElement) {
-      try {
-        await document.exitFullscreen();
-      } catch {
-        // Ignore if already exited
-      }
-    }
-  };
-
-  const handleCopyShareLink = async () => {
-    const shareUrl = `${window.location.origin}/game/${game.slug}`;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    } catch {
-      // Fallback ignore
-    }
-  };
-
-  const similarGames = useMemo(() => {
-    const primaryGenres = new Set(game.genres.map((g) => g.toLowerCase()));
-    const scored: { item: NormalizedGame; score: number }[] = [];
-    for (const candidate of allGames) {
-      if (candidate.id === game.id) continue;
-      let score = 0;
-      for (const g of candidate.genres) {
-        if (primaryGenres.has(g.toLowerCase())) score += 2;
-      }
-      if (candidate.category === game.category) score += 1;
-      if (score > 0) {
-        scored.push({ item: candidate, score });
-      }
-      if (scored.length >= 40) break;
-    }
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 12).map((s) => s.item);
-  }, [allGames, game]);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
 
   const isFullscreen = viewportMode === 'fullscreen';
-  const isTheater = viewportMode === 'theater';
+  const isPartScreen = viewportMode === 'part-screen';
+
+  useEffect(() => {
+    setViewportMode('standard');
+    setReloadNonce(0);
+    setIframeLoaded(false);
+  }, [game.id]);
+
+  useEffect(() => {
+    onFullscreenChange(isFullscreen);
+    return () => onFullscreenChange(false);
+  }, [isFullscreen, onFullscreenChange]);
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      if (!document.fullscreenElement) {
+        setViewportMode((prev) => (prev === 'fullscreen' ? 'standard' : prev));
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const relatedGames = useMemo(() => {
+    const tagSet = new Set([...game.genres, ...game.tags].map((x) => x.toLowerCase()));
+    return allGames
+      .filter((item) => item.id !== game.id)
+      .map((item) => {
+        const overlap = [...item.genres, ...item.tags].reduce(
+          (acc, entry) => (tagSet.has(entry.toLowerCase()) ? acc + 1 : acc),
+          0
+        );
+        return { item, overlap };
+      })
+      .sort((a, b) => b.overlap - a.overlap)
+      .slice(0, 8)
+      .map((entry) => entry.item);
+  }, [allGames, game]);
+
+  const stats = playHistory[game.id];
+  const isFav = Boolean(favorites[game.id]);
+
+  const toggleNativeFullscreen = async () => {
+    if (isFullscreen) {
+      if (document.fullscreenElement) {
+        try {
+          await document.exitFullscreen();
+        } catch {
+          // CSS fallback exit handled below
+        }
+      }
+      setViewportMode('standard');
+      return;
+    }
+
+    setViewportMode('fullscreen');
+    if (stageRef.current?.requestFullscreen) {
+      try {
+        await stageRef.current.requestFullscreen();
+      } catch {
+        // CSS fullscreen fills the viewport cleanly when blocked
+      }
+    }
+  };
+
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/game/${game.slug}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${game.title} — ProtoX Games`,
+          text: `Play ${game.title} instantly on ProtoX Games.`,
+          url: shareUrl,
+        });
+        return;
+      } catch {
+        // Fallback to clipboard copy
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2200);
+    } catch {
+      // Ignore clipboard permission failure
+    }
+  };
 
   return (
-    <div className="mx-auto max-w-7xl px-3 pt-4 pb-24 sm:px-6 lg:px-8">
-      {/* Top Breadcrumb & Back Bar */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2 text-xs text-slate-400">
+    <div className="space-y-6">
+      {!isFullscreen && (
+        <div className="glass-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3">
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/10 bg-[#0F151E] px-3 py-1.5 font-semibold text-slate-200 transition hover:border-emerald-500/45 hover:text-white"
+            className="inline-flex min-h-[38px] items-center gap-2 text-xs font-semibold text-white transition hover:text-[#A78BFA]"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to Explore</span>
           </button>
-          <span className="hidden text-slate-600 sm:inline">/</span>
-          <button
-            type="button"
-            onClick={() => onSelectGenre(game.category)}
-            className="hidden truncate font-medium text-slate-300 hover:text-emerald-400 sm:inline"
-          >
-            {game.category}
-          </button>
-          <span className="hidden text-slate-600 sm:inline">/</span>
-          <span className="truncate font-semibold text-white">{game.title}</span>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs text-[#A1A1B5]">
+            <button
+              type="button"
+              onClick={() => onSelectGenre(game.category)}
+              className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 font-medium text-white hover:border-[#8B5CF6]/55"
+            >
+              {game.category}
+            </button>
+            <span className="inline-flex items-center gap-1 font-mono text-amber-300">
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              {game.rating}
+            </span>
+            {stats && (
+              <span className="font-mono text-[#06B6D4]">
+                {stats.playCount} {stats.playCount === 1 ? 'play' : 'plays'}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Playable Frosted Glass Stage (Unrestricted Playgama embed permissions) */}
+      <section
+        ref={stageRef}
+        className={
+          isFullscreen
+            ? 'fixed inset-0 z-50 flex flex-col bg-[#080B16]'
+            : 'glass-panel-deep relative overflow-hidden rounded-3xl p-2 sm:p-3'
+        }
+      >
+        <div
+          onClick={() => iframeRef.current?.focus()}
+          className={`relative w-full overflow-hidden bg-black ${
+            isFullscreen
+              ? 'flex-1'
+              : isPartScreen
+              ? 'h-[78vh] min-h-[500px] rounded-2xl'
+              : game.orientation.vertical && !game.orientation.horizontal
+              ? 'mx-auto aspect-[9/14] max-h-[76vh] max-w-[460px] rounded-2xl'
+              : 'aspect-[16/9] min-h-[360px] max-h-[76vh] rounded-2xl'
+          }`}
+        >
+          {!iframeLoaded && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#080B16]/90">
+              <Loader2 className="h-8 w-8 animate-spin text-[#06B6D4]" />
+              <p className="font-display text-sm font-semibold text-white">
+                Launching {game.title}...
+              </p>
+            </div>
+          )}
+
+          <iframe
+            ref={iframeRef}
+            key={`${game.id}-${reloadNonce}`}
+            title={game.title}
+            src={game.url}
+            onLoad={() => setIframeLoaded(true)}
+            referrerPolicy="no-referrer-when-downgrade"
+            className="h-full w-full border-0"
+            allow="fullscreen; accelerometer; clipboard-read; clipboard-write; screen-wake-lock; speaker-selection; web-share; gyroscope; xr-spatial-tracking; autoplay; encrypted-media; picture-in-picture; storage-access; gamepad"
+            allowFullScreen
+          />
+
+          {muted && (
+            <div className="pointer-events-none absolute top-3 left-3 z-20 rounded-xl border border-white/15 bg-[#080B16]/85 px-3 py-1.5 text-[11px] font-medium text-[#A1A1B5] backdrop-blur-md">
+              Sound muted preference active — toggle audio inside the game menu if needed
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void handleCopyShareLink()}
-            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/10 bg-[#0F151E] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/25"
-          >
-            {copiedLink ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Share2 className="h-3.5 w-3.5" />}
-            {copiedLink ? 'Link Copied' : 'Share'}
-          </button>
-        </div>
-      </div>
+        {/* Player Action Bar */}
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-4 ${
+            isFullscreen ? 'border-t border-white/10 bg-[#101629]/95' : ''
+          }`}
+        >
+          <div className="min-w-0">
+            <h1 className="truncate font-display text-lg font-bold text-white sm:text-xl">
+              {game.title}
+            </h1>
+            <p className="text-xs text-[#A1A1B5]">
+              {game.genres.slice(0, 3).join(' · ')}
+            </p>
+          </div>
 
-      {/* Main Split / Theater Layout */}
-      <div className="grid gap-6 lg:grid-cols-12">
-        {/* Player Column (8 cols in Part Screen, 12 cols in Theater) */}
-        <div className={isTheater ? 'lg:col-span-12' : 'lg:col-span-8'}>
-          <div
-            ref={stageContainerRef}
-            className={
-              isFullscreen
-                ? 'fixed inset-0 z-50 flex flex-col bg-[#05070B]'
-                : 'flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0B1018] shadow-2xl'
-            }
-          >
-            {/* Game Stage Viewport (Instant Launch — Zero Pre-Roll Ads) */}
-            <div
-              className={`relative w-full bg-black ${
-                isFullscreen
-                  ? 'flex-1'
-                  : isTheater
-                  ? 'h-[62vh] min-h-[420px] max-h-[760px]'
-                  : 'aspect-[16/10] min-h-[300px] sm:min-h-[450px]'
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setViewportMode((m) => (m === 'part-screen' ? 'standard' : 'part-screen'))
+              }
+              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                isPartScreen
+                  ? 'border-[#06B6D4]/55 bg-[#06B6D4]/20 text-white'
+                  : 'border-white/15 bg-white/5 text-[#A1A1B5] hover:text-white'
               }`}
             >
-              <iframe
-                key={`${game.id}_${reloadNonce}_${muted ? 'm' : 'u'}`}
-                src={game.url}
-                title={game.title}
-                className="h-full w-full border-0 bg-black"
-                allowFullScreen
-                allow="fullscreen; accelerometer; autoplay; camera; clipboard-read; clipboard-write; encrypted-media; gamepad; gyroscope; microphone; picture-in-picture; screen-wake-lock; speaker-selection; web-share; xr-spatial-tracking"
-              />
-            </div>
+              <RectangleHorizontal className="h-3.5 w-3.5" />
+              <span>Theater</span>
+            </button>
 
-            {/* Realistic CrazyGames-Style Player Control Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-[#0F151E] px-3.5 py-2.5 sm:px-5">
-              {/* Left: Game Identity */}
-              <div className="flex min-w-0 items-center gap-3">
-                <img
-                  src={game.icon || game.thumb}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="h-9 w-9 shrink-0 rounded-lg border border-white/10 object-cover"
-                />
-                <div className="min-w-0">
-                  <p className="truncate font-display text-sm font-bold text-white sm:text-base">
-                    {game.title}
-                  </p>
-                  <p className="truncate text-[11px] text-slate-400">
-                    {game.category}
-                    <span className="mx-1.5" aria-hidden="true">·</span>
-                    <span>Instant HTML5</span>
-                    {stats && stats.playCount > 0 && (
-                      <>
-                        <span className="mx-1.5" aria-hidden="true">·</span>
-                        <span>{stats.playCount} plays</span>
-                      </>
-                    )}
-                  </p>
-                </div>
-              </div>
+            <button
+              type="button"
+              onClick={() => void toggleNativeFullscreen()}
+              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                isFullscreen
+                  ? 'border border-[#8B5CF6]/60 bg-[#8B5CF6] text-white'
+                  : 'bg-gradient-to-r from-[#8B5CF6] to-[#06B6D4] text-white hover:brightness-110'
+              }`}
+            >
+              {isFullscreen ? (
+                <>
+                  <Minimize2 className="h-3.5 w-3.5" />
+                  Exit Fullscreen
+                </>
+              ) : (
+                <>
+                  <Expand className="h-3.5 w-3.5" />
+                  Fullscreen
+                </>
+              )}
+            </button>
 
-              {/* Right: Viewport Modes (Part Screen / Theater / Fullscreen) + More Options */}
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                {/* Screen Size Selector */}
-                <div
-                  role="group"
-                  aria-label="Player viewport size"
-                  className="flex items-center rounded-lg border border-white/10 bg-[#090D14] p-0.5"
-                >
-                  <button
-                    type="button"
-                    onClick={() => void applyViewportMode('part')}
-                    title="Part Screen (Standard)"
-                    aria-label="Part screen mode"
-                    className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition ${
-                      viewportMode === 'part'
-                        ? 'bg-emerald-500 text-slate-950'
-                        : 'text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    <Columns2 className="h-3.5 w-3.5" />
-                    <span className="hidden md:inline">Part Screen</span>
-                  </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIframeLoaded(false);
+                setReloadNonce((n) => n + 1);
+              }}
+              className="glass-card inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-[#06B6D4]" />
+              Restart
+            </button>
 
-                  <button
-                    type="button"
-                    onClick={() => void applyViewportMode('theater')}
-                    title="Theater Wide Mode"
-                    aria-label="Theater wide mode"
-                    className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition ${
-                      viewportMode === 'theater'
-                        ? 'bg-emerald-500 text-slate-950'
-                        : 'text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    <RectangleHorizontal className="h-3.5 w-3.5" />
-                    <span className="hidden md:inline">Theater</span>
-                  </button>
+            <a
+              href={game.playgamaGameUrl || game.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="glass-card inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white"
+              title="Open game directly in a new tab"
+            >
+              <ExternalLink className="h-3.5 w-3.5 text-[#A78BFA]" />
+              <span className="hidden sm:inline">Direct</span>
+            </a>
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void applyViewportMode(isFullscreen ? 'part' : 'fullscreen')
-                    }
-                    title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                    aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                    className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition ${
-                      isFullscreen
-                        ? 'bg-emerald-500 text-slate-950'
-                        : 'text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    {isFullscreen ? (
-                      <Minimize2 className="h-3.5 w-3.5" />
-                    ) : (
-                      <Maximize2 className="h-3.5 w-3.5" />
-                    )}
-                    <span className="hidden sm:inline">
-                      {isFullscreen ? 'Exit Full' : 'Fullscreen'}
-                    </span>
-                  </button>
-                </div>
+            <button
+              type="button"
+              onClick={() => setMuted((m) => !m)}
+              aria-label={muted ? 'Unmute game' : 'Mute game'}
+              className="glass-card inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              {muted ? (
+                <VolumeX className="h-3.5 w-3.5 text-rose-400" />
+              ) : (
+                <Volume2 className="h-3.5 w-3.5 text-[#22C55E]" />
+              )}
+              <span className="hidden sm:inline">{muted ? 'Muted' : 'Sound'}</span>
+            </button>
 
-                {/* Quick Utility Buttons */}
-                <button
-                  type="button"
-                  onClick={() => setMuted((m) => !m)}
-                  aria-label={muted ? 'Unmute frame' : 'Mute frame'}
-                  title={muted ? 'Unmute' : 'Mute'}
-                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-[#090D14] text-slate-300 transition hover:border-white/25 hover:text-white"
-                >
-                  {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                </button>
+            <button
+              type="button"
+              onClick={() => onToggleFavorite(game)}
+              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                isFav
+                  ? 'border-[#8B5CF6]/60 bg-[#8B5CF6]/25 text-white'
+                  : 'border-white/15 bg-white/5 text-[#A1A1B5] hover:text-white'
+              }`}
+            >
+              <Heart className={`h-3.5 w-3.5 ${isFav ? 'fill-[#A78BFA] text-[#A78BFA]' : ''}`} />
+              <span>{isFav ? 'Favorited' : 'Favorite'}</span>
+            </button>
 
-                <button
-                  type="button"
-                  onClick={() => setReloadNonce((n) => n + 1)}
-                  aria-label="Reload game"
-                  title="Reload game"
-                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-[#090D14] text-slate-300 transition hover:border-white/25 hover:text-white"
-                >
-                  <RotateCw className="h-4 w-4" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onToggleFavorite(game)}
-                  aria-label={isFav ? 'Remove from favorites' : 'Save to favorites'}
-                  title={isFav ? 'Saved in Favorites' : 'Save to Favorites'}
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
-                    isFav
-                      ? 'border-emerald-500/45 bg-emerald-500/15 text-emerald-400'
-                      : 'border-white/10 bg-[#090D14] text-slate-300 hover:border-white/25 hover:text-white'
-                  }`}
-                >
-                  <Heart className={`h-4 w-4 ${isFav ? 'fill-current' : ''}`} />
-                </button>
-
-                {/* More Options Dropdown */}
-                <div ref={moreMenuRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setMoreOpen((o) => !o)}
-                    aria-expanded={moreOpen}
-                    aria-label="More game options"
-                    title="More options"
-                    className="inline-flex h-10 items-center gap-1 rounded-lg border border-white/10 bg-[#090D14] px-2.5 text-xs font-semibold text-slate-200 transition hover:border-white/25 hover:text-white"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                    <span className="hidden sm:inline">More</span>
-                  </button>
-
-                  {moreOpen && (
-                    <div className="absolute right-0 bottom-12 z-50 w-56 rounded-xl border border-white/15 bg-[#121926] p-1.5 shadow-2xl">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowControlsPanel((s) => !s);
-                          setMoreOpen(false);
-                          controlsSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
-                        }}
-                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-slate-200 hover:bg-white/10"
-                      >
-                        <HelpCircle className="h-4 w-4 text-emerald-400" />
-                        How to Play & Controls
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleCopyShareLink();
-                          setMoreOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-slate-200 hover:bg-white/10"
-                      >
-                        <Copy className="h-4 w-4 text-emerald-400" />
-                        Copy Direct Route Link
-                      </button>
-
-                      <a
-                        href={game.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setMoreOpen(false)}
-                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-slate-200 hover:bg-white/10"
-                      >
-                        <ExternalLink className="h-4 w-4 text-emerald-400" />
-                        Open Game in New Tab
-                      </a>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReloadNonce((n) => n + 1);
-                          setMoreOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-slate-200 hover:bg-white/10"
-                      >
-                        <RotateCw className="h-4 w-4 text-emerald-400" />
-                        Restart / Reload Embed
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMoreOpen(false);
-                          onOpenSupportModal(5);
-                        }}
-                        className="mt-1 flex w-full items-center gap-2.5 rounded-lg bg-emerald-500/15 px-3 py-2.5 text-left text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
-                      >
-                        <Heart className="h-4 w-4" />
-                        Support protoX Games
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              className="glass-card inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              {copiedShare ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-[#22C55E]" />
+                  Copied Link
+                </>
+              ) : (
+                <>
+                  <Share2 className="h-3.5 w-3.5 text-[#A78BFA]" />
+                  Share
+                </>
+              )}
+            </button>
           </div>
+        </div>
+      </section>
 
-          {/* Conditional Controls Pop-Down Banner when toggled from More Menu */}
-          {showControlsPanel && game.howToPlayText && (
-            <div className="mt-3 rounded-xl border border-emerald-500/30 bg-[#0F1816] p-4 text-xs leading-relaxed text-slate-200">
-              <p className="font-display text-sm font-bold text-emerald-300">Controls & Tips</p>
-              <p className="mt-1 whitespace-pre-line">{game.howToPlayText}</p>
-            </div>
-          )}
+      {!isFullscreen && (
+        <SupportReminderBanner
+          dismissed={reminderDismissed}
+          onDismiss={onDismissReminder}
+          onOpenSupport={onOpenSupportModal}
+        />
+      )}
 
-          {/* Support Reminder below the game player */}
-          {!reminderDismissed && (
-            <SupportReminderBanner
-              compact
-              onOpenSupportModal={onOpenSupportModal}
-              onDismiss={onDismissReminder}
-            />
-          )}
+      {!isFullscreen && (
+        <>
+          <section className="grid gap-6 lg:grid-cols-12">
+            <div className="glass-panel rounded-3xl p-6 lg:col-span-7">
+              <h2 className="font-display text-lg font-bold text-white">About {game.title}</h2>
+              <p className="mt-2.5 text-sm leading-relaxed whitespace-pre-line text-[#A1A1B5]">
+                {game.description}
+              </p>
 
-          {/* Game Details & Controls Card */}
-          <section
-            ref={controlsSectionRef}
-            className="mt-5 rounded-2xl border border-white/10 bg-[#0F151E] p-5 sm:p-7"
-          >
-            <div className="flex flex-col justify-between gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start">
-              <div>
-                <h1 className="font-display text-2xl font-bold text-white sm:text-3xl">
-                  {game.title}
-                </h1>
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
-                  {game.genres.map((genre, i) => (
-                    <span key={genre} className="inline-flex items-center gap-3">
-                      {i > 0 && <span className="text-slate-600" aria-hidden="true">·</span>}
-                      <button
-                        type="button"
-                        onClick={() => onSelectGenre(genre)}
-                        className="font-medium text-emerald-400 hover:underline"
-                      >
-                        {genre}
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Technical Specs Summary */}
-              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400">
-                <span className="inline-flex items-center gap-1.5">
-                  {game.orientation.horizontal ? (
-                    <Monitor className="h-3.5 w-3.5 text-emerald-400" />
-                  ) : (
-                    <Smartphone className="h-3.5 w-3.5 text-emerald-400" />
-                  )}
-                  {game.orientation.horizontal && game.orientation.vertical
-                    ? 'Desktop & Mobile'
-                    : game.orientation.horizontal
-                    ? 'Landscape'
-                    : 'Portrait'}
-                </span>
-                {game.supportedLanguages.length > 0 && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Globe className="h-3.5 w-3.5 text-emerald-400" />
-                    {game.supportedLanguages.length} Languages
+              <div className="mt-5 flex flex-wrap gap-2">
+                {game.genres.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => onSelectGenre(g)}
+                    className="rounded-xl border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white hover:border-[#8B5CF6]/60"
+                  >
+                    {g}
+                  </button>
+                ))}
+                {game.tags.slice(0, 6).map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-xl border border-white/10 bg-[#080B16]/50 px-2.5 py-1 text-[11px] text-[#A1A1B5]"
+                  >
+                    {tag}
                   </span>
-                )}
+                ))}
               </div>
             </div>
 
-            <div className="mt-5 space-y-5">
-              <div>
-                <h2 className="font-display text-sm font-bold tracking-wide text-slate-200 uppercase">
-                  About {game.title}
-                </h2>
-                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-300">
-                  {game.description}
-                </p>
-              </div>
+            <div className="glass-panel rounded-3xl p-6 lg:col-span-5">
+              <h2 className="font-display text-lg font-bold text-white">Game Instructions</h2>
+              <p className="mt-2.5 text-sm leading-relaxed whitespace-pre-line text-[#A1A1B5]">
+                {game.howToPlayText ||
+                  'Use your mouse, touch screen, or keyboard controls (WASD / Arrow Keys / Spacebar) inside the interactive player stage above. Click Fullscreen or Theater anytime for expanded viewing.'}
+              </p>
 
-              {game.howToPlayText && (
-                <div className="rounded-xl border border-white/10 bg-[#0A0F17] p-4">
-                  <h2 className="font-display text-sm font-bold tracking-wide text-emerald-400 uppercase">
-                    How to Play
-                  </h2>
-                  <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-200">
-                    {game.howToPlayText}
+              <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/10 pt-4 text-xs">
+                <div>
+                  <span className="text-[#A1A1B5]">Orientation</span>
+                  <p className="mt-0.5 font-semibold text-white">
+                    {game.orientation.horizontal && game.orientation.vertical
+                      ? 'Landscape & Portrait'
+                      : game.orientation.vertical
+                      ? 'Portrait'
+                      : 'Landscape'}
                   </p>
                 </div>
-              )}
-
-              {game.mobileReady.length > 0 && (
-                <div className="text-xs text-slate-400">
-                  <span className="font-semibold text-slate-200">Platforms: </span>
-                  {game.mobileReady.join(' · ')}
+                <div>
+                  <span className="text-[#A1A1B5]">Platforms</span>
+                  <p className="mt-0.5 font-semibold text-white">
+                    {game.mobileReady.length > 0 ? 'Desktop & Mobile' : 'Desktop Web'}
+                  </p>
                 </div>
-              )}
+              </div>
             </div>
           </section>
-        </div>
 
-        {/* Right Sidebar (Part Screen) or Full Row Below (Theater Mode): Similar Games */}
-        <aside className={isTheater ? 'lg:col-span-12' : 'lg:col-span-4'}>
-          <div className="rounded-2xl border border-white/10 bg-[#0F151E] p-4 sm:p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-lg font-bold text-white">Similar Games</h2>
-              <button
-                type="button"
-                onClick={() => onSelectGenre(game.category)}
-                className="text-xs font-semibold text-emerald-400 hover:underline"
-              >
-                More {game.category}
-              </button>
-            </div>
+          <FeedbackSection
+            defaultName={userDisplayName}
+            defaultEmail={userEmail}
+            gameTitle={game.title}
+            savedComments={feedbackComments}
+            onSaveToHistory={onSaveFeedback}
+          />
 
-            <div
-              className={
-                isTheater
-                  ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4'
-                  : 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1'
-              }
-            >
-              {similarGames.map((sim) => (
-                <GameCard
-                  key={sim.id}
-                  game={sim}
-                  isFavorite={Boolean(favorites[sim.id])}
-                  stats={playHistory[sim.id]}
-                  onSelect={onSelectGame}
-                  onToggleFavorite={onToggleFavorite}
-                />
-              ))}
-            </div>
-          </div>
-        </aside>
-      </div>
+          {relatedGames.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-xl font-bold text-white">Related Games</h2>
+                <button
+                  type="button"
+                  onClick={() => onSelectGenre(game.category)}
+                  className="text-xs font-semibold text-[#06B6D4] hover:underline"
+                >
+                  More in {game.category}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {relatedGames.map((rel, idx) => (
+                  <GameCard
+                    key={rel.id}
+                    game={rel}
+                    isFavorite={Boolean(favorites[rel.id])}
+                    stats={playHistory[rel.id]}
+                    index={idx}
+                    onSelect={onSelectGame}
+                    onToggleFavorite={onToggleFavorite}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 }

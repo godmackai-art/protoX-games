@@ -16,13 +16,8 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import {
-  Copy,
-  Download,
-  Heart,
-  Search,
-  X,
-} from 'lucide-react';
+import { Copy, Download, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   auth,
   db,
@@ -33,19 +28,37 @@ import {
 import { PROTOX_GAMES_OBJECT } from './data/playgamaCatalog';
 import { EXPO_ROUTER_SINGLE_FILE_CODE } from './expoTemplate';
 import type {
+  AppPreferences,
+  AppViewMode,
+  FeedbackEntry,
+  GameSortOrder,
+  GameTypeFilter,
   NormalizedGame,
   PlayHistoryEntry,
   SupportAmountDollars,
   SupportReceiptEntry,
   UserProfileDoc,
 } from './types/game';
-import { normalizeGamesInput } from './utils/catalog';
-import { BottomNav, type RootTab } from './components/BottomNav';
-import { HomeView } from './components/HomeView';
-import { GamesView, type OrientationFilter } from './components/GamesView';
+import { buildDiscoveryShelves, normalizeGamesInput } from './utils/catalog';
+import { TopNavbar } from './components/TopNavbar';
+import { Sidebar } from './components/Sidebar';
+import { BottomNav } from './components/BottomNav';
+import { HeroSection } from './components/HeroSection';
+import { DiscoveryShelves } from './components/DiscoveryShelves';
+import { ExploreCatalogView } from './components/ExploreCatalogView';
+import { CategoriesView } from './components/CategoriesView';
+import {
+  FavoritesView,
+  LeaderboardView,
+  RecentlyPlayedView,
+  SettingsView,
+} from './components/CollectionViews';
 import { ProfileView } from './components/ProfileView';
 import { GamePlayerPage } from './components/GamePlayerPage';
+import { FeedbackSection } from './components/FeedbackSection';
+import { SupportReminderBanner } from './components/SupportReminderBanner';
 import { SupportModal } from './components/SupportModal';
+import { Footer } from './components/Footer';
 
 /* ============================================================================
    ERROR BOUNDARY (Required for Firebase Permission Diagnostics)
@@ -65,21 +78,21 @@ class AppErrorBoundary extends Component<{ children: React.ReactNode }, ErrorBou
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-[#070A0F] p-6 text-slate-100">
-          <div className="w-full max-w-lg rounded-2xl border border-rose-500/30 bg-[#0F151E] p-8">
+        <div className="flex min-h-screen items-center justify-center bg-[#080B16] p-6 text-white">
+          <div className="glass-panel-deep w-full max-w-lg rounded-3xl border border-rose-500/35 p-8">
             <h1 className="font-display text-2xl font-bold text-white">Something went wrong</h1>
-            <p className="mt-2 text-sm text-slate-300">
+            <p className="mt-2 text-sm text-[#A1A1B5]">
               A database or runtime error interrupted the session. Please reload the page or sign in again.
             </p>
-            <pre className="mt-4 max-h-40 overflow-auto rounded-lg bg-black/50 p-3 font-mono text-xs text-rose-300">
+            <pre className="mt-4 max-h-40 overflow-auto rounded-xl bg-black/50 p-3 font-mono text-xs text-rose-300">
               {this.state.message}
             </pre>
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="mt-5 rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+              className="mt-5 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#06B6D4] px-5 py-2.5 text-sm font-semibold text-white"
             >
-              Reload protoX Games
+              Reload ProtoX Games
             </button>
           </div>
         </div>
@@ -90,23 +103,44 @@ class AppErrorBoundary extends Component<{ children: React.ReactNode }, ErrorBou
 }
 
 /* ============================================================================
-   CLIENT ROUTER HELPERS (/, /games, /profile, /game/:slug)
+   CLIENT ROUTER HELPERS
    ============================================================================ */
-type ParsedRoute =
-  | { view: 'home' }
-  | { view: 'games' }
-  | { view: 'profile' }
-  | { view: 'game'; slug: string };
+type ParsedRoute = { view: AppViewMode; slug?: string };
 
 function parsePathname(pathname: string): ParsedRoute {
   const clean = pathname.replace(/\/+$/, '') || '/';
-  if (clean === '/games') return { view: 'games' };
+  if (clean === '/discover') return { view: 'discover' };
+  if (clean === '/games' || clean === '/explore') return { view: 'games' };
+  if (clean === '/categories') return { view: 'categories' };
+  if (clean === '/trending') return { view: 'trending' };
+  if (clean === '/favorites') return { view: 'favorites' };
+  if (clean === '/recent') return { view: 'recent' };
+  if (clean === '/leaderboard') return { view: 'leaderboard' };
+  if (clean === '/settings') return { view: 'settings' };
   if (clean === '/profile') return { view: 'profile' };
   if (clean.startsWith('/game/')) {
     const slug = decodeURIComponent(clean.slice('/game/'.length));
     if (slug) return { view: 'game', slug };
   }
   return { view: 'home' };
+}
+
+function viewToPath(view: AppViewMode): string {
+  if (view === 'home') return '/';
+  return `/${view}`;
+}
+
+function upsertHeadTag(
+  selector: string,
+  createFn: () => HTMLElement,
+  applyFn: (el: HTMLElement) => void
+) {
+  let el = document.head.querySelector<HTMLElement>(selector);
+  if (!el) {
+    el = createFn();
+    document.head.appendChild(el);
+  }
+  applyFn(el);
 }
 
 /* ============================================================================
@@ -129,6 +163,13 @@ function ProtoXGamesApp() {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, []);
 
+  const navigateView = useCallback(
+    (view: AppViewMode) => {
+      navigate(viewToPath(view));
+    },
+    [navigate]
+  );
+
   useEffect(() => {
     const handlePopState = () => {
       setPathname(window.location.pathname || '/');
@@ -144,26 +185,33 @@ function ProtoXGamesApp() {
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [playHistory, setPlayHistory] = useState<Record<string, PlayHistoryEntry>>({});
   const [supportReceipts, setSupportReceipts] = useState<SupportReceiptEntry[]>([]);
+  const [feedbackComments, setFeedbackComments] = useState<FeedbackEntry[]>([]);
   const [authLoading, setAuthLoading] = useState(false);
   const [notice, setNotice] = useState<{ type: 'info' | 'error'; text: string } | null>(null);
 
   // Catalog Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [activeGenre, setActiveGenre] = useState('All Games');
-  const [orientationFilter, setOrientationFilter] = useState<OrientationFilter>('all');
+  const [sortOrder, setSortOrder] = useState<GameSortOrder>('popularity');
+  const [typeFilter, setTypeFilter] = useState<GameTypeFilter>('all');
 
-  // Player Fullscreen State
+  // Player & UI Preferences
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
+  const [preferences, setPreferences] = useState<AppPreferences>({
+    ambientEffects: true,
+    compactCards: false,
+    audioHints: true,
+  });
 
-  // Support Stripe Checkout & Reminder State
+  // Stripe Support Modal & Reminder State (1$, 10$, 100$)
   const [showSupportModal, setShowSupportModal] = useState(false);
-  const [selectedSupportAmount, setSelectedSupportAmount] = useState<SupportAmountDollars>(5);
+  const [selectedSupportAmount, setSelectedSupportAmount] = useState<SupportAmountDollars>(1);
   const [reminderDismissed, setReminderDismissed] = useState(false);
   const [stripeConfigured, setStripeConfigured] = useState<boolean | null>(null);
   const [stripeProductId, setStripeProductId] = useState<string | null>(null);
-  const [checkoutBusy, setCheckoutBusy] = useState<SupportAmountDollars | null>(null);
+  const [supportCheckoutBusy, setSupportCheckoutBusy] = useState<SupportAmountDollars | null>(null);
 
-  // Utility Modals
+  // Developer Tools Modals
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
@@ -171,12 +219,32 @@ function ProtoXGamesApp() {
   const [copiedExpo, setCopiedExpo] = useState(false);
 
   const activeRouteGame = useMemo(() => {
-    if (route.view !== 'game') return null;
+    if (route.view !== 'game' || !route.slug) return null;
     const target = route.slug.toLowerCase();
     return (
       games.find((g) => g.slug.toLowerCase() === target || g.id.toLowerCase() === target) || null
     );
   }, [route, games]);
+
+  const discoveryShelves = useMemo(
+    () => buildDiscoveryShelves(games, playHistory),
+    [games, playHistory]
+  );
+
+  const totalCategories = useMemo(() => {
+    const set = new Set<string>();
+    games.forEach((g) => g.genres.forEach((gen) => set.add(gen)));
+    return set.size;
+  }, [games]);
+
+  const totalSessions = useMemo(
+    () => Object.values(playHistory).reduce((acc, item) => acc + item.playCount, 0),
+    [playHistory]
+  );
+
+  const featuredGame = useMemo(() => {
+    return discoveryShelves[0]?.games[0] || games[0];
+  }, [discoveryShelves, games]);
 
   useEffect(() => {
     if (route.view !== 'game') {
@@ -184,15 +252,157 @@ function ProtoXGamesApp() {
     }
   }, [route.view]);
 
+  // Dynamic Google Search Console SEO & OpenGraph / Canonical / VideoGame JSON-LD
   useEffect(() => {
+    const canonicalUrl = `${window.location.origin}${window.location.pathname}`;
+    const defaultTitle = 'ProtoX Games – Play 2,900+ Free Instant Browser Games';
+    const defaultDesc =
+      'Play 2,900+ free HTML5 and WebGL games instantly on ProtoX Games. Zero downloads, zero ads—just pure browser gaming across action, racing, puzzle, and arcade.';
+
+    let pageTitle = defaultTitle;
+    let pageDesc = defaultDesc;
+    let pageImage = `${window.location.origin}/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp`;
+
     if (route.view === 'game' && activeRouteGame) {
-      document.title = `${activeRouteGame.title} — protoX Games`;
-    } else {
-      document.title = 'protoX Games — Instant Web Games Arcade';
+      pageTitle = `Play ${activeRouteGame.title} Free Online – ProtoX Games`;
+      pageDesc = activeRouteGame.description.slice(0, 158) || defaultDesc;
+      if (activeRouteGame.thumb) pageImage = activeRouteGame.thumb;
+    } else if (route.view === 'games') {
+      pageTitle = 'Explore All Browser Games – ProtoX Games';
+    } else if (route.view === 'categories') {
+      pageTitle = 'Game Categories – Action, Racing, Puzzle | ProtoX Games';
+    } else if (route.view === 'trending') {
+      pageTitle = 'Trending Web Games – ProtoX Games';
+    } else if (route.view === 'leaderboard') {
+      pageTitle = 'Top Games Leaderboard – ProtoX Games';
+    } else if (route.view === 'profile') {
+      pageTitle = 'Player Profile & Support – ProtoX Games';
+    }
+
+    document.title = pageTitle;
+
+    upsertHeadTag(
+      'link[rel="canonical"]',
+      () => {
+        const link = document.createElement('link');
+        link.rel = 'canonical';
+        return link;
+      },
+      (el) => ((el as HTMLLinkElement).href = canonicalUrl)
+    );
+
+    upsertHeadTag(
+      'meta[name="description"]',
+      () => {
+        const m = document.createElement('meta');
+        m.name = 'description';
+        return m;
+      },
+      (el) => ((el as HTMLMetaElement).content = pageDesc)
+    );
+
+    upsertHeadTag(
+      'meta[property="og:url"]',
+      () => {
+        const m = document.createElement('meta');
+        m.setAttribute('property', 'og:url');
+        return m;
+      },
+      (el) => ((el as HTMLMetaElement).content = canonicalUrl)
+    );
+
+    upsertHeadTag(
+      'meta[property="og:title"]',
+      () => {
+        const m = document.createElement('meta');
+        m.setAttribute('property', 'og:title');
+        return m;
+      },
+      (el) => ((el as HTMLMetaElement).content = pageTitle)
+    );
+
+    upsertHeadTag(
+      'meta[property="og:description"]',
+      () => {
+        const m = document.createElement('meta');
+        m.setAttribute('property', 'og:description');
+        return m;
+      },
+      (el) => ((el as HTMLMetaElement).content = pageDesc)
+    );
+
+    upsertHeadTag(
+      'meta[property="og:image"]',
+      () => {
+        const m = document.createElement('meta');
+        m.setAttribute('property', 'og:image');
+        return m;
+      },
+      (el) => ((el as HTMLMetaElement).content = pageImage)
+    );
+
+    upsertHeadTag(
+      'meta[name="twitter:title"]',
+      () => {
+        const m = document.createElement('meta');
+        m.name = 'twitter:title';
+        return m;
+      },
+      (el) => ((el as HTMLMetaElement).content = pageTitle)
+    );
+
+    upsertHeadTag(
+      'meta[name="twitter:description"]',
+      () => {
+        const m = document.createElement('meta');
+        m.name = 'twitter:description';
+        return m;
+      },
+      (el) => ((el as HTMLMetaElement).content = pageDesc)
+    );
+
+    const gscToken = (import.meta.env.VITE_GSC_VERIFICATION as string | undefined)?.trim();
+    if (gscToken) {
+      upsertHeadTag(
+        'meta[name="google-site-verification"]',
+        () => {
+          const m = document.createElement('meta');
+          m.name = 'google-site-verification';
+          return m;
+        },
+        (el) => ((el as HTMLMetaElement).content = gscToken)
+      );
+    }
+
+    const existingGameLd = document.head.querySelector('#protox-game-jsonld');
+    if (route.view === 'game' && activeRouteGame) {
+      const ldEl = existingGameLd || document.createElement('script');
+      ldEl.id = 'protox-game-jsonld';
+      ldEl.setAttribute('type', 'application/ld+json');
+      ldEl.textContent = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'VideoGame',
+        name: activeRouteGame.title,
+        description: pageDesc,
+        genre: activeRouteGame.genres,
+        image: pageImage,
+        url: canonicalUrl,
+        playMode: 'SinglePlayer',
+        applicationCategory: 'Game',
+        operatingSystem: 'Web Browser',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'USD',
+        },
+      });
+      if (!existingGameLd) document.head.appendChild(ldEl);
+    } else if (existingGameLd) {
+      existingGameLd.remove();
     }
   }, [route.view, activeRouteGame]);
 
-  // Check Stripe server configuration & configured Product ID
+  // Check Stripe config
   useEffect(() => {
     fetch('/api/stripe/config')
       .then((res) => res.json())
@@ -214,6 +424,7 @@ function ProtoXGamesApp() {
         setFavorites({});
         setPlayHistory({});
         setSupportReceipts([]);
+        setFeedbackComments([]);
         return;
       }
 
@@ -338,11 +549,32 @@ function ProtoXGamesApp() {
       (error) => handleFirestoreError(error, OperationType.LIST, supportPath)
     );
 
+    const feedbackPath = `users/${user.uid}/feedback`;
+    const unsubFeedback = onSnapshot(
+      collection(db, 'users', user.uid, 'feedback'),
+      (snap) => {
+        const list: FeedbackEntry[] = snap.docs.map((d) => {
+          const data = d.data() as FeedbackEntry;
+          return {
+            feedbackId: data.feedbackId || d.id,
+            authorName: data.authorName || 'Player',
+            replyEmail: data.replyEmail || '',
+            recipientEmail: data.recipientEmail || 'stevenevel003@gmail.com',
+            gameTitle: data.gameTitle,
+            message: data.message || '',
+          };
+        });
+        setFeedbackComments(list);
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, feedbackPath)
+    );
+
     return () => {
       unsubProfile();
       unsubFavs();
       unsubHistory();
       unsubSupports();
+      unsubFeedback();
     };
   }, [authReady, user]);
 
@@ -369,16 +601,15 @@ function ProtoXGamesApp() {
             paid?: boolean;
             amountCents?: number;
             amountDollars?: number;
-            currency?: string;
             productId?: string | null;
             sessionId?: string;
           }) => {
             if (!data.paid) return;
+            const safeSessionId = (data.sessionId || sessionId).slice(0, 200);
             const amountCents = Number(data.amountCents || 0);
             const verifiedDollars = data.amountDollars || Math.round(amountCents / 100);
-            const safeSessionId = (data.sessionId || sessionId).slice(0, 200);
 
-            if (user && user.emailVerified && [100, 500, 1000, 10000].includes(amountCents)) {
+            if (user && user.emailVerified && [100, 1000, 10000].includes(amountCents)) {
               const supportId = safeSessionId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
               const supportPath = `users/${user.uid}/supports/${supportId}`;
               const userPath = `users/${user.uid}`;
@@ -407,12 +638,12 @@ function ProtoXGamesApp() {
 
             setNotice({
               type: 'info',
-              text: `Thank you for supporting protoX Games with ${verifiedDollars}$! Your Stripe receipt (${safeSessionId}) is confirmed.`,
+              text: `Thank you for supporting ProtoX Games with ${verifiedDollars}$! Stripe receipt ${safeSessionId} confirmed.`,
             });
           }
         )
         .catch(() => {
-          setNotice({ type: 'error', text: 'Could not verify Stripe support receipt.' });
+          setNotice({ type: 'error', text: 'Could not verify Stripe session.' });
         })
         .finally(() => {
           window.history.replaceState({}, '', window.location.pathname);
@@ -472,7 +703,7 @@ function ProtoXGamesApp() {
 
   const toggleFavorite = async (game: NormalizedGame) => {
     if (!user) {
-      setNotice({ type: 'info', text: 'Sign in with Google on your Profile to save favorite games.' });
+      setNotice({ type: 'info', text: 'Sign in with Google to save favorite games.' });
       return;
     }
     if (!user.emailVerified) return;
@@ -496,6 +727,34 @@ function ProtoXGamesApp() {
     }
   };
 
+  const handleSaveFeedbackToFirestore = useCallback(
+    async (entry: {
+      authorName: string;
+      replyEmail: string;
+      gameTitle?: string;
+      message: string;
+    }) => {
+      if (!user || !user.emailVerified) return;
+      const feedbackId = `fb_${Date.now()}`;
+      const docPath = `users/${user.uid}/feedback/${feedbackId}`;
+      try {
+        await setDoc(doc(db, 'users', user.uid, 'feedback', feedbackId), {
+          userId: user.uid,
+          feedbackId,
+          authorName: entry.authorName.slice(0, 100),
+          replyEmail: entry.replyEmail.slice(0, 160),
+          recipientEmail: 'stevenevel003@gmail.com',
+          ...(entry.gameTitle ? { gameTitle: entry.gameTitle.slice(0, 120) } : {}),
+          message: entry.message.slice(0, 2000),
+          createdAt: serverTimestamp(),
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, docPath);
+      }
+    },
+    [user]
+  );
+
   const openGameRoute = useCallback(
     (game: NormalizedGame) => {
       navigate(`/game/${game.slug}`);
@@ -512,22 +771,13 @@ function ProtoXGamesApp() {
     [navigate]
   );
 
-  const handleTabChange = useCallback(
-    (tab: RootTab) => {
-      if (tab === 'home') navigate('/');
-      else if (tab === 'games') navigate('/games');
-      else navigate('/profile');
-    },
-    [navigate]
-  );
-
-  const openSupportWithAmount = useCallback((amount: SupportAmountDollars = 5) => {
+  const openSupportWithAmount = useCallback((amount: SupportAmountDollars = 1) => {
     setSelectedSupportAmount(amount);
     setShowSupportModal(true);
   }, []);
 
   const handleStripeSupport = async (amount: SupportAmountDollars) => {
-    setCheckoutBusy(amount);
+    setSupportCheckoutBusy(amount);
     setNotice(null);
     try {
       const res = await fetch('/api/stripe/create-checkout-session', {
@@ -544,59 +794,17 @@ function ProtoXGamesApp() {
       const data = (await res.json()) as {
         configured?: boolean;
         url?: string;
-        sandboxSessionId?: string;
-        amountDollars?: number;
-        amountCents?: number;
-        productId?: string | null;
         error?: string;
       };
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Stripe checkout request failed.');
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || 'Unable to start live Stripe support checkout.');
       }
-
-      if (data.configured && data.url) {
-        window.location.assign(data.url);
-        return;
-      }
-
-      // Sandbox fallback when STRIPE_SECRET_KEY is not yet configured in environment
-      const amountCents = Number(data.amountCents || amount * 100);
-      const sandboxSessionId = (data.sandboxSessionId || `cs_test_support_${amount}_${Date.now()}`).slice(0, 200);
-
-      if (user && user.emailVerified) {
-        const supportId = sandboxSessionId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
-        const supportPath = `users/${user.uid}/supports/${supportId}`;
-        try {
-          await setDoc(doc(db, 'users', user.uid, 'supports', supportId), {
-            userId: user.uid,
-            supportId,
-            amountCents,
-            currency: 'usd',
-            stripeSessionId: sandboxSessionId,
-            ...(data.productId ? { stripeProductId: data.productId.slice(0, 120) } : {}),
-            createdAt: serverTimestamp(),
-          });
-          await updateDoc(doc(db, 'users', user.uid), {
-            totalSupportedCents: Number(profile?.totalSupportedCents || 0) + amountCents,
-            lastStripeSessionId: sandboxSessionId,
-            updatedAt: serverTimestamp(),
-          });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, supportPath);
-        }
-      }
-
-      setShowSupportModal(false);
-      setNotice({
-        type: 'info',
-        text: `Thank you for your ${amount}$ support via Stripe Sandbox (${sandboxSessionId})!`,
-      });
+      window.location.assign(data.url);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unable to process support checkout.';
       setNotice({ type: 'error', text: msg });
     } finally {
-      setCheckoutBusy(null);
+      setSupportCheckoutBusy(null);
     }
   };
 
@@ -605,7 +813,7 @@ function ProtoXGamesApp() {
     try {
       const trimmed = pasteText.trim();
       if (!trimmed) {
-        setPasteError('Paste a valid JSON or JS object of games first.');
+        setPasteError('Paste a valid JSON catalog object first.');
         return;
       }
       const parsed = JSON.parse(trimmed);
@@ -618,119 +826,62 @@ function ProtoXGamesApp() {
       setShowPasteModal(false);
       setNotice({
         type: 'info',
-        text: `Loaded ${normalized.length.toLocaleString()} games into protoX Games catalog.`,
+        text: `Loaded ${normalized.length.toLocaleString()} games into ProtoX Games catalog.`,
       });
     } catch {
       setPasteError(
-        'Invalid JSON syntax. Ensure keys and strings use double quotes when importing at runtime, or paste any JS object directly into src/data/playgamaCatalog.ts.'
+        'Invalid JSON syntax. Ensure keys and strings use double quotes when importing at runtime.'
       );
     }
   };
 
-  const activeBottomTab: RootTab | null =
-    route.view === 'home'
-      ? 'home'
-      : route.view === 'games'
-      ? 'games'
-      : route.view === 'profile'
-      ? 'profile'
-      : null;
+  const favoritesCount = Object.keys(favorites).length;
 
   return (
-    <div className="min-h-screen bg-[#070A0F] text-slate-100">
-      {/* =====================================================================
-          COMPACT TOP BAR (Hidden in player fullscreen)
-         ===================================================================== */}
-      {!playerFullscreen && (
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-[#080C14]/95 backdrop-blur-md">
-          <div className="mx-auto flex h-12 max-w-7xl items-center justify-between gap-4 px-4 sm:h-14 sm:px-6 lg:px-8">
-            {/* Zone 1: Brand Mark */}
-            <a
-              href="/"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate('/');
-              }}
-              className="flex shrink-0 items-center gap-2.5 whitespace-nowrap font-display text-base font-bold tracking-tight text-white sm:text-lg"
-            >
-              <img
-                src="/assets/aistudio/Neon_Gaming_G_Icon_Hub_ec0ff11a.webp"
-                alt="protoX Games mark"
-                className="h-7 w-7 rounded-md object-cover"
-              />
-              <span>protoX Games</span>
-            </a>
-
-            {/* Zone 2: Quick Search Bar (Desktop & Tablet) */}
-            <div className="hidden max-w-md flex-1 md:block">
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    if (route.view !== 'games') {
-                      navigate('/games');
-                    }
-                  }}
-                  placeholder={`Search ${games.length.toLocaleString()} web games...`}
-                  className="h-9 w-full rounded-full border border-white/10 bg-[#111824] pr-4 pl-10 text-xs text-white placeholder:text-slate-400 focus:border-emerald-500/60 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Zone 3: Support CTA + Account */}
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => openSupportWithAmount(5)}
-                className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/25"
-              >
-                <Heart className="h-3.5 w-3.5 fill-current" />
-                <span>Support</span>
-              </button>
-
-              {user ? (
-                <button
-                  type="button"
-                  onClick={() => navigate('/profile')}
-                  className="inline-flex min-h-[36px] shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-white/15 bg-[#0F151E] px-3 py-1.5 text-xs font-semibold text-white transition hover:border-emerald-500/50"
-                >
-                  <span className="max-w-[90px] truncate sm:max-w-[120px]">
-                    {profile?.displayName || user.displayName || 'Profile'}
-                  </span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={authLoading}
-                  onClick={handleGoogleSignIn}
-                  className="min-h-[36px] shrink-0 whitespace-nowrap rounded-lg bg-emerald-500 px-3.5 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60"
-                >
-                  {authLoading ? 'Signing in...' : 'Sign In'}
-                </button>
-              )}
-            </div>
-          </div>
-        </header>
+    <div className="relative min-h-screen overflow-x-clip bg-[#080B16] pb-24 text-white lg:pb-12">
+      {/* Ambient VisionOS Atmospheric Gradients */}
+      {preferences.ambientEffects && !playerFullscreen && (
+        <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+          <div className="absolute -top-40 left-[12%] h-[520px] w-[520px] rounded-full bg-[#8B5CF6]/18 blur-[140px]" />
+          <div className="absolute top-[28%] -right-24 h-[460px] w-[460px] rounded-full bg-[#06B6D4]/14 blur-[135px]" />
+          <div className="absolute bottom-0 left-[32%] h-[420px] w-[420px] rounded-full bg-[#8B5CF6]/10 blur-[140px]" />
+        </div>
       )}
 
-      {/* Notification Banner */}
+      {/* Floating Frosted-Glass Top Navigation Bar */}
+      {!playerFullscreen && (
+        <TopNavbar
+          activeView={route.view}
+          games={games}
+          searchQuery={searchQuery}
+          user={user}
+          profile={profile}
+          authLoading={authLoading}
+          favoritesCount={favoritesCount}
+          playHistory={playHistory}
+          onSearchChange={(q) => setSearchQuery(q)}
+          onNavigateView={navigateView}
+          onSelectGame={openGameRoute}
+          onOpenSupport={() => openSupportWithAmount(1)}
+          onGoogleSignIn={() => void handleGoogleSignIn()}
+        />
+      )}
+
+      {/* System Notice Banner */}
       {notice && !playerFullscreen && (
-        <div className="mx-auto mt-3 max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="relative z-20 mx-auto mt-3 max-w-[1480px] px-3 sm:px-6">
           <div
-            className={`flex items-center justify-between gap-4 rounded-xl border px-4 py-2.5 text-xs sm:text-sm ${
+            className={`glass-panel flex items-center justify-between gap-4 rounded-2xl px-4 py-3 text-xs sm:text-sm ${
               notice.type === 'error'
-                ? 'border-rose-500/30 bg-rose-950/30 text-rose-200'
-                : 'border-emerald-500/30 bg-emerald-950/30 text-emerald-200'
+                ? 'border-rose-500/40 text-rose-200'
+                : 'border-[#22C55E]/40 text-white'
             }`}
           >
             <span>{notice.text}</span>
             <button
               type="button"
               onClick={() => setNotice(null)}
-              className="shrink-0 text-slate-400 hover:text-white"
+              className="shrink-0 text-[#A1A1B5] hover:text-white"
               aria-label="Dismiss notification"
             >
               <X className="h-4 w-4" />
@@ -739,113 +890,248 @@ function ProtoXGamesApp() {
         </div>
       )}
 
-      {/* =====================================================================
-          ROUTE VIEWS (Home | Games | Profile | /game/:slug)
-         ===================================================================== */}
-      <main>
-        {route.view === 'home' && (
-          <HomeView
-            games={games}
-            favorites={favorites}
-            playHistory={playHistory}
-            reminderDismissed={reminderDismissed}
-            onDismissReminder={() => setReminderDismissed(true)}
-            onSelectGame={openGameRoute}
-            onToggleFavorite={(g) => void toggleFavorite(g)}
-            onBrowseGenre={handleBrowseGenre}
-            onOpenSupportModal={openSupportWithAmount}
-          />
-        )}
-
-        {route.view === 'games' && (
-          <GamesView
-            games={games}
-            favorites={favorites}
-            playHistory={playHistory}
-            searchQuery={searchQuery}
-            activeGenre={activeGenre}
-            orientationFilter={orientationFilter}
-            reminderDismissed={reminderDismissed}
-            onDismissReminder={() => setReminderDismissed(true)}
-            onSearchChange={setSearchQuery}
-            onGenreChange={setActiveGenre}
-            onOrientationChange={setOrientationFilter}
-            onSelectGame={openGameRoute}
-            onToggleFavorite={(g) => void toggleFavorite(g)}
-            onOpenSupportModal={openSupportWithAmount}
-          />
-        )}
-
-        {route.view === 'profile' && (
-          <ProfileView
-            user={user}
+      {/* Main Responsive Workspace */}
+      <div
+        className={`relative z-10 mx-auto flex max-w-[1480px] gap-6 ${
+          playerFullscreen ? '' : 'px-3 pt-5 sm:px-6'
+        }`}
+      >
+        {!playerFullscreen && (
+          <Sidebar
+            activeView={route.view}
             profile={profile}
-            games={games}
-            favorites={favorites}
-            playHistory={playHistory}
-            supportReceipts={supportReceipts}
-            authLoading={authLoading}
-            checkoutBusy={checkoutBusy}
-            stripeConfigured={stripeConfigured}
-            stripeProductId={stripeProductId}
-            onGoogleSignIn={() => void handleGoogleSignIn()}
-            onSignOut={() => void handleSignOut()}
-            onSupportAmount={(amt) => void handleStripeSupport(amt)}
-            onSelectGame={openGameRoute}
-            onToggleFavorite={(g) => void toggleFavorite(g)}
-            onOpenPasteModal={() => setShowPasteModal(true)}
-            onOpenExpoModal={() => setShowExpoModal(true)}
+            favoritesCount={favoritesCount}
+            recentCount={Object.keys(playHistory).length}
+            onNavigateView={navigateView}
+            onOpenSupport={() => openSupportWithAmount(1)}
           />
         )}
 
-        {route.view === 'game' && activeRouteGame && (
-          <GamePlayerPage
-            game={activeRouteGame}
-            allGames={games}
-            favorites={favorites}
-            playHistory={playHistory}
-            reminderDismissed={reminderDismissed}
-            onDismissReminder={() => setReminderDismissed(true)}
-            onBack={() => navigate('/games')}
-            onSelectGame={openGameRoute}
-            onSelectGenre={handleBrowseGenre}
-            onToggleFavorite={(g) => void toggleFavorite(g)}
-            onOpenSupportModal={openSupportWithAmount}
-            onFullscreenChange={setPlayerFullscreen}
-          />
-        )}
-
-        {route.view === 'game' && !activeRouteGame && (
-          <div className="mx-auto max-w-xl px-4 py-16 pb-28 text-center">
-            <h1 className="font-display text-2xl font-bold text-white">Game Not Found</h1>
-            <p className="mt-2 text-sm text-slate-400">
-              No title matched route <code className="font-mono text-emerald-400">/game/{route.slug}</code>.
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate('/games')}
-              className="mt-6 inline-flex min-h-[44px] items-center rounded-lg bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+        <main className="min-w-0 flex-1">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${route.view}-${route.slug || ''}`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22 }}
+              className="space-y-10"
             >
-              Browse All Games
-            </button>
-          </div>
-        )}
-      </main>
+              {(route.view === 'home' || route.view === 'discover') && (
+                <>
+                  {route.view === 'home' && (
+                    <HeroSection
+                      totalGames={games.length}
+                      totalCategories={totalCategories}
+                      featuredGame={featuredGame}
+                      favoritesCount={favoritesCount}
+                      totalSessions={totalSessions}
+                      onExploreGames={() => navigateView('games')}
+                      onDiscoverTrending={() => navigateView('trending')}
+                      onLaunchFeatured={openGameRoute}
+                    />
+                  )}
 
-      {/* =====================================================================
-          BOTTOM 3-TAB NAVIGATION (Home | Games | Profile)
-         ===================================================================== */}
+                  <SupportReminderBanner
+                    dismissed={reminderDismissed}
+                    onDismiss={() => setReminderDismissed(true)}
+                    onOpenSupport={openSupportWithAmount}
+                  />
+
+                  <DiscoveryShelves
+                    shelves={discoveryShelves}
+                    favorites={favorites}
+                    playHistory={playHistory}
+                    reminderDismissed={reminderDismissed}
+                    compactCards={preferences.compactCards}
+                    onDismissReminder={() => setReminderDismissed(true)}
+                    onSelectGame={openGameRoute}
+                    onToggleFavorite={(g) => void toggleFavorite(g)}
+                    onExploreGenre={handleBrowseGenre}
+                    onOpenSupport={openSupportWithAmount}
+                  />
+
+                  <FeedbackSection
+                    defaultName={profile?.displayName || user?.displayName || ''}
+                    defaultEmail={profile?.email || user?.email || ''}
+                    savedComments={feedbackComments}
+                    onSaveToHistory={handleSaveFeedbackToFirestore}
+                  />
+                </>
+              )}
+
+              {(route.view === 'games' || route.view === 'trending') && (
+                <ExploreCatalogView
+                  title={route.view === 'trending' ? 'Trending Games' : 'Explore All Games'}
+                  subtitle={
+                    route.view === 'trending'
+                      ? 'Highest-rated instant browser experiences sorted by popularity.'
+                      : `Browse all ${games.length.toLocaleString()} browser titles with instant search and filtering.`
+                  }
+                  games={games}
+                  favorites={favorites}
+                  playHistory={playHistory}
+                  searchQuery={searchQuery}
+                  activeGenre={activeGenre}
+                  sortOrder={route.view === 'trending' ? 'popularity' : sortOrder}
+                  typeFilter={typeFilter}
+                  reminderDismissed={reminderDismissed}
+                  compactCards={preferences.compactCards}
+                  onDismissReminder={() => setReminderDismissed(true)}
+                  onSearchChange={setSearchQuery}
+                  onGenreChange={setActiveGenre}
+                  onSortChange={setSortOrder}
+                  onTypeFilterChange={setTypeFilter}
+                  onSelectGame={openGameRoute}
+                  onToggleFavorite={(g) => void toggleFavorite(g)}
+                  onOpenSupport={openSupportWithAmount}
+                />
+              )}
+
+              {route.view === 'categories' && (
+                <CategoriesView games={games} onSelectCategory={handleBrowseGenre} />
+              )}
+
+              {route.view === 'favorites' && (
+                <FavoritesView
+                  user={user}
+                  games={games}
+                  favorites={favorites}
+                  playHistory={playHistory}
+                  onSelectGame={openGameRoute}
+                  onToggleFavorite={(g) => void toggleFavorite(g)}
+                  onGoogleSignIn={() => void handleGoogleSignIn()}
+                  onExploreGames={() => navigateView('games')}
+                />
+              )}
+
+              {route.view === 'recent' && (
+                <RecentlyPlayedView
+                  games={games}
+                  favorites={favorites}
+                  playHistory={playHistory}
+                  onSelectGame={openGameRoute}
+                  onToggleFavorite={(g) => void toggleFavorite(g)}
+                  onExploreGames={() => navigateView('games')}
+                />
+              )}
+
+              {route.view === 'leaderboard' && (
+                <LeaderboardView
+                  games={games}
+                  playHistory={playHistory}
+                  profile={profile}
+                  onSelectGame={openGameRoute}
+                />
+              )}
+
+              {route.view === 'settings' && (
+                <SettingsView
+                  profile={profile}
+                  preferences={preferences}
+                  totalGames={games.length}
+                  onUpdatePreferences={setPreferences}
+                  onOpenSupport={() => openSupportWithAmount(1)}
+                  onOpenPasteModal={() => setShowPasteModal(true)}
+                  onOpenExpoModal={() => setShowExpoModal(true)}
+                />
+              )}
+
+              {route.view === 'profile' && (
+                <ProfileView
+                  user={user}
+                  profile={profile}
+                  games={games}
+                  favorites={favorites}
+                  playHistory={playHistory}
+                  supportReceipts={supportReceipts}
+                  feedbackComments={feedbackComments}
+                  authLoading={authLoading}
+                  checkoutBusy={supportCheckoutBusy}
+                  stripeConfigured={stripeConfigured}
+                  stripeProductId={stripeProductId}
+                  onGoogleSignIn={() => void handleGoogleSignIn()}
+                  onSignOut={() => void handleSignOut()}
+                  onSupportAmount={(amt) => void handleStripeSupport(amt)}
+                  onSelectGame={openGameRoute}
+                  onToggleFavorite={(g) => void toggleFavorite(g)}
+                  onOpenPasteModal={() => setShowPasteModal(true)}
+                  onOpenExpoModal={() => setShowExpoModal(true)}
+                  onSaveFeedback={handleSaveFeedbackToFirestore}
+                />
+              )}
+
+              {route.view === 'game' && activeRouteGame && (
+                <GamePlayerPage
+                  game={activeRouteGame}
+                  allGames={games}
+                  favorites={favorites}
+                  playHistory={playHistory}
+                  feedbackComments={feedbackComments}
+                  userDisplayName={profile?.displayName || user?.displayName || ''}
+                  userEmail={profile?.email || user?.email || ''}
+                  reminderDismissed={reminderDismissed}
+                  onDismissReminder={() => setReminderDismissed(true)}
+                  onBack={() => navigateView('games')}
+                  onSelectGame={openGameRoute}
+                  onSelectGenre={handleBrowseGenre}
+                  onToggleFavorite={(g) => void toggleFavorite(g)}
+                  onOpenSupportModal={openSupportWithAmount}
+                  onFullscreenChange={setPlayerFullscreen}
+                  onSaveFeedback={handleSaveFeedbackToFirestore}
+                />
+              )}
+
+              {route.view === 'game' && !activeRouteGame && (
+                <div className="glass-panel mx-auto max-w-xl rounded-3xl p-10 text-center">
+                  <h1 className="font-display text-2xl font-bold text-white">Game Not Found</h1>
+                  <p className="mt-2 text-sm text-[#A1A1B5]">
+                    No title matched route{' '}
+                    <code className="font-mono text-[#06B6D4]">/game/{route.slug}</code>.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigateView('games')}
+                    className="mt-6 inline-flex min-h-[44px] items-center rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#06B6D4] px-6 py-2.5 text-sm font-semibold text-white"
+                  >
+                    Browse All Games
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+
+          {!playerFullscreen && (
+            <Footer
+              onNavigateView={navigateView}
+              onOpenSupport={() => openSupportWithAmount(1)}
+              onContactFeedback={() => {
+                if (route.view !== 'home') {
+                  navigateView('profile');
+                }
+                setTimeout(() => {
+                  document.getElementById('feedback')?.scrollIntoView({ behavior: 'smooth' });
+                }, 120);
+              }}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
       {!playerFullscreen && (
-        <BottomNav activeTab={activeBottomTab} onNavigateTab={handleTabChange} />
+        <BottomNav
+          activeView={route.view}
+          onNavigateView={navigateView}
+          onOpenSupport={() => openSupportWithAmount(1)}
+        />
       )}
 
-      {/* =====================================================================
-          SUPPORT MODAL (1$, 5$, 10$, 100$ via Stripe Product ID)
-         ===================================================================== */}
+      {/* Support Stripe Modal (1$, 10$, 100$) */}
       <SupportModal
         open={showSupportModal}
         selectedAmount={selectedSupportAmount}
-        checkoutBusy={checkoutBusy}
+        checkoutBusy={supportCheckoutBusy}
         stripeConfigured={stripeConfigured}
         stripeProductId={stripeProductId}
         userEmail={user?.email}
@@ -854,23 +1140,30 @@ function ProtoXGamesApp() {
         onClose={() => setShowSupportModal(false)}
       />
 
-      {/* =====================================================================
-          PASTE / TEST 4,000+ GAMES JSON OBJECT MODAL
-         ===================================================================== */}
+      {/* Load Custom JSON Modal */}
       {showPasteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-[#0F151E] p-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          onClick={() => setShowPasteModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="glass-panel-deep w-full max-w-2xl rounded-3xl p-6"
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="font-display text-xl font-bold text-white">Load Custom Games Object</h3>
-                <p className="mt-1 text-xs text-slate-400">
-                  Paste your JSON catalog below to preview live, or update <code className="font-mono text-emerald-400">src/data/playgamaCatalog.ts</code>.
+                <h3 className="font-display text-xl font-bold text-white">
+                  Load Custom Games Object
+                </h3>
+                <p className="mt-1 text-xs text-[#A1A1B5]">
+                  Paste a JSON catalog below to preview live, or update{' '}
+                  <code className="font-mono text-[#06B6D4]">src/data/playgamaCatalog.ts</code>.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowPasteModal(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 text-[#A1A1B5] hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -881,7 +1174,7 @@ function ProtoXGamesApp() {
               onChange={(e) => setPasteText(e.target.value)}
               rows={9}
               placeholder='{"my-game":{"title":"Space Drift","category":"Racing","url":"https://example.com/game","thumb":"https://..."}}'
-              className="mt-4 w-full rounded-xl border border-white/15 bg-[#070A0F] p-3 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:border-emerald-500 focus:outline-none"
+              className="glass-input mt-4 w-full rounded-2xl p-3 font-mono text-xs text-white placeholder:text-[#A1A1B5]/50 focus:border-[#8B5CF6] focus:outline-none"
             />
             {pasteError && <p className="mt-2 text-xs text-rose-400">{pasteError}</p>}
 
@@ -892,14 +1185,14 @@ function ProtoXGamesApp() {
                   setRawGamesObj(PROTOX_GAMES_OBJECT);
                   setShowPasteModal(false);
                 }}
-                className="min-h-[40px] rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5"
+                className="glass-card min-h-[40px] rounded-xl px-4 py-2 text-xs font-semibold text-white"
               >
                 Reset to Default
               </button>
               <button
                 type="button"
                 onClick={handleLoadPastedObject}
-                className="min-h-[40px] rounded-lg bg-emerald-500 px-5 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
+                className="min-h-[40px] rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#06B6D4] px-5 py-2 text-xs font-semibold text-white"
               >
                 Load Into Catalog
               </button>
@@ -908,31 +1201,35 @@ function ProtoXGamesApp() {
         </div>
       )}
 
-      {/* =====================================================================
-          SINGLE-FILE EXPO ROUTER EXPORT MODAL (app/index.tsx)
-         ===================================================================== */}
+      {/* Expo Router Export Modal */}
       {showExpoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl border border-white/15 bg-[#0F151E] p-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          onClick={() => setShowExpoModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="glass-panel-deep flex max-h-[90vh] w-full max-w-3xl flex-col rounded-3xl p-6"
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="font-display text-xl font-bold text-white">
                   Expo Router Single-File Pack (app/index.tsx)
                 </h3>
-                <p className="mt-1 text-xs text-slate-400">
-                  Single-file Expo Router screen with bottom 3 tabs (Home, Games, Profile), infinite FlatList, Firebase Auth + Firestore, and Stripe Support (1$, 5$, 10$, 100$).
+                <p className="mt-1 text-xs text-[#A1A1B5]">
+                  Single-file Expo Router mobile screen with bottom navigation, infinite FlatList, and feedback.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowExpoModal(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 text-[#A1A1B5] hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <pre className="mt-4 flex-1 overflow-auto rounded-xl border border-white/10 bg-[#070A0F] p-4 font-mono text-xs text-slate-200">
+            <pre className="glass-input mt-4 flex-1 overflow-auto rounded-2xl p-4 font-mono text-xs text-slate-200">
               {EXPO_ROUTER_SINGLE_FILE_CODE}
             </pre>
 
@@ -940,7 +1237,9 @@ function ProtoXGamesApp() {
               <button
                 type="button"
                 onClick={() => {
-                  const blob = new Blob([EXPO_ROUTER_SINGLE_FILE_CODE], { type: 'text/plain;charset=utf-8' });
+                  const blob = new Blob([EXPO_ROUTER_SINGLE_FILE_CODE], {
+                    type: 'text/plain;charset=utf-8',
+                  });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
@@ -948,7 +1247,7 @@ function ProtoXGamesApp() {
                   a.click();
                   URL.revokeObjectURL(url);
                 }}
-                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5"
+                className="glass-card inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-white"
               >
                 <Download className="h-4 w-4" /> Download index.tsx
               </button>
@@ -959,7 +1258,7 @@ function ProtoXGamesApp() {
                   setCopiedExpo(true);
                   setTimeout(() => setCopiedExpo(false), 2000);
                 }}
-                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-emerald-500 px-5 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#06B6D4] px-5 py-2 text-xs font-semibold text-white"
               >
                 <Copy className="h-4 w-4" /> {copiedExpo ? 'Copied' : 'Copy Code'}
               </button>

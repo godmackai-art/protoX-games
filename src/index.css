@@ -6,12 +6,28 @@
     --font-display: 'Chakra Petch', sans-serif;
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+    --bg-primary: #080B16;
+    --bg-secondary: #101629;
+    --glass-surface: rgba(255, 255, 255, 0.07);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --accent-primary: #8B5CF6;
+    --accent-secondary: #06B6D4;
+    --accent-highlight: #A78BFA;
+    --text-secondary: #A1A1B5;
+    --success: #22C55E;
   }
 
   html {
     font-family: var(--font-sans);
+    background-color: #080B16;
+    color: #FFFFFF;
     scroll-behavior: smooth;
     color-scheme: dark;
+  }
+
+  body {
+    background-color: #080B16;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, .font-display {
@@ -22,6 +38,51 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: 0 20px 50px rgba(3, 6, 18, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.glass-panel-deep {
+  background: rgba(16, 22, 41, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(26px);
+  -webkit-backdrop-filter: blur(26px);
+  box-shadow: 0 24px 60px rgba(3, 6, 18, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 14px 34px rgba(3, 6, 18, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(139, 92, 246, 0.45);
+  box-shadow: 0 22px 48px rgba(139, 92, 246, 0.16), 0 8px 24px rgba(6, 182, 212, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.glass-input {
+  background: rgba(8, 11, 22, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

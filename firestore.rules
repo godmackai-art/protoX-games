@@ -51,7 +51,7 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
-    // Validation Blueprint: SupportContribution
+    // Validation Blueprint: SupportContribution (1$, 10$, 100$ tiers)
     function isValidSupportContribution(data, userId, supportId) {
       return data.userId is string
         && isValidId(data.userId)
@@ -61,7 +61,7 @@ service cloud.firestore {
         && isValidId(data.supportId)
         && data.supportId == supportId
         && (data.amountCents is int || data.amountCents is float)
-        && data.amountCents in [100, 500, 1000, 10000]
+        && data.amountCents in [100, 1000, 10000]
         && data.currency is string
         && data.currency.size() <= 10
         && data.currency == 'usd'
@@ -69,6 +69,31 @@ service cloud.firestore {
         && data.stripeSessionId.size() >= 1
         && data.stripeSessionId.size() <= 200
         && (!('stripeProductId' in data) || (data.stripeProductId is string && data.stripeProductId.size() <= 120))
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: FeedbackComment
+    function isValidFeedbackComment(data, userId, feedbackId) {
+      return data.userId is string
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && data.userId == userId
+        && data.feedbackId is string
+        && isValidId(data.feedbackId)
+        && data.feedbackId == feedbackId
+        && data.authorName is string
+        && data.authorName.size() >= 1
+        && data.authorName.size() <= 100
+        && data.replyEmail is string
+        && data.replyEmail.size() >= 3
+        && data.replyEmail.size() <= 160
+        && data.recipientEmail is string
+        && data.recipientEmail.size() <= 160
+        && data.recipientEmail == 'stevenevel003@gmail.com'
+        && (!('gameTitle' in data) || (data.gameTitle is string && data.gameTitle.size() <= 120))
+        && data.message is string
+        && data.message.size() >= 1
+        && data.message.size() <= 2000
         && data.createdAt is timestamp;
     }
 
@@ -136,7 +161,7 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          // Action: Profile sync (also permits removing legacy plan/isPro fields if present)
+          // Action: Profile sync (also cleanly strips legacy isPro/plan/stripeSessionId if present)
           incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'photoURL', 'totalSupportedCents', 'updatedAt', 'isPro', 'plan', 'stripeSessionId'])
           ||
           // Action: Support payment summary update
@@ -162,6 +187,29 @@ service cloud.firestore {
           && incoming().keys().hasAll(['userId', 'supportId', 'amountCents', 'currency', 'stripeSessionId', 'createdAt'])
           && incoming().keys().hasOnly(['userId', 'supportId', 'amountCents', 'currency', 'stripeSessionId', 'stripeProductId', 'createdAt'])
           && isValidSupportContribution(incoming(), userId, supportId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update, delete: if false;
+      }
+
+      // User Feedback Comments Subcollection
+      match /feedback/{feedbackId} {
+        allow get: if isValidId(userId)
+          && isValidId(feedbackId)
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow list: if isOwner(userId)
+          && resource.data.userId == request.auth.uid;
+
+        allow create: if isVerified()
+          && isValidId(userId)
+          && isValidId(feedbackId)
+          && isOwner(userId)
+          && incoming().keys().hasAll(['userId', 'feedbackId', 'authorName', 'replyEmail', 'recipientEmail', 'message', 'createdAt'])
+          && incoming().keys().hasOnly(['userId', 'feedbackId', 'authorName', 'replyEmail', 'recipientEmail', 'gameTitle', 'message', 'createdAt'])
+          && isValidFeedbackComment(incoming(), userId, feedbackId)
           && incoming().createdAt == request.time
           && exists(/databases/$(database)/documents/users/$(userId));
 

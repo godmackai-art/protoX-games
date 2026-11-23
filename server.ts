@@ -14,8 +14,9 @@ const isProduction = process.env.NODE_ENV === 'production';
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY?.trim() || '';
 const stripeClient = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const defaultStripeProductId = process.env.STRIPE_PRODUCT_ID?.trim() || '';
+const FEEDBACK_RECIPIENT = 'stevenevel003@gmail.com';
 
-export type SupportAmountDollars = 1 | 5 | 10 | 100;
+export type SupportAmountDollars = 1 | 10 | 100;
 
 interface SupportTierConfig {
   amountDollars: SupportAmountDollars;
@@ -28,25 +29,19 @@ const SUPPORT_TIERS: Record<SupportAmountDollars, SupportTierConfig> = {
   1: {
     amountDollars: 1,
     unitAmount: 100,
-    label: '$1',
+    label: '1$',
     productId: process.env.STRIPE_PRODUCT_ID_1?.trim() || defaultStripeProductId,
-  },
-  5: {
-    amountDollars: 5,
-    unitAmount: 500,
-    label: '$5',
-    productId: process.env.STRIPE_PRODUCT_ID_5?.trim() || defaultStripeProductId,
   },
   10: {
     amountDollars: 10,
     unitAmount: 1000,
-    label: '$10',
+    label: '10$',
     productId: process.env.STRIPE_PRODUCT_ID_10?.trim() || defaultStripeProductId,
   },
   100: {
     amountDollars: 100,
     unitAmount: 10000,
-    label: '$100',
+    label: '100$',
     productId: process.env.STRIPE_PRODUCT_ID_100?.trim() || defaultStripeProductId,
   },
 };
@@ -83,6 +78,11 @@ function sanitizeReturnPath(rawPath: unknown): string {
   return trimmed.slice(0, 200);
 }
 
+function sanitizeSingleLine(value: unknown, maxLen: number): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/[\r\n]+/g, ' ').trim().slice(0, maxLen);
+}
+
 async function startServer() {
   const app = express();
   app.use(express.json());
@@ -91,11 +91,36 @@ async function startServer() {
     res.json({ ok: true, service: 'protox-games' });
   });
 
+  app.get('/sitemap.xml', (req, res) => {
+    const sitemapPath = isProduction
+      ? path.resolve(__dirname, 'dist', 'sitemap.xml')
+      : path.resolve(__dirname, 'public', 'sitemap.xml');
+    if (!fs.existsSync(sitemapPath)) {
+      res.status(404).send('Sitemap not found.');
+      return;
+    }
+    const rawXml = fs.readFileSync(sitemapPath, 'utf8');
+    const host = req.get('x-forwarded-host') || req.get('host') || `localhost:${PORT}`;
+    const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+    const origin = sanitizeBaseOrigin(`${proto}://${host}`);
+    const rewritten = rawXml.replace(/https:\/\/protox-games\.pages\.dev/g, origin);
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.send(rewritten);
+  });
+
+  app.get('/robots.txt', (req, res) => {
+    const host = req.get('x-forwarded-host') || req.get('host') || `localhost:${PORT}`;
+    const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+    const origin = sanitizeBaseOrigin(`${proto}://${host}`);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(`User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`);
+  });
+
   app.get('/api/stripe/config', (_req, res) => {
     res.json({
       configured: Boolean(stripeClient),
       productId: defaultStripeProductId || null,
-      tiers: [1, 5, 10, 100].map((amount) => {
+      tiers: [1, 10, 100].map((amount) => {
         const tier = SUPPORT_TIERS[amount as SupportAmountDollars];
         return {
           amountDollars: tier.amountDollars,
@@ -118,8 +143,16 @@ async function startServer() {
       };
 
       const parsedAmount = Number(body.amount);
-      if (parsedAmount !== 1 && parsedAmount !== 5 && parsedAmount !== 10 && parsedAmount !== 100) {
-        res.status(400).json({ error: 'Support amount must be $1, $5, $10, or $100.' });
+      if (parsedAmount !== 1 && parsedAmount !== 10 && parsedAmount !== 100) {
+        res.status(400).json({ error: 'Support amount must be 1$, 10$, or 100$.' });
+        return;
+      }
+
+      if (!stripeClient) {
+        res.status(503).json({
+          configured: false,
+          error: 'Stripe checkout requires STRIPE_SECRET_KEY to be configured on the server.',
+        });
         return;
       }
 
@@ -133,19 +166,6 @@ async function startServer() {
       const returnPath = sanitizeReturnPath(body.returnPath);
       const separator = returnPath.includes('?') ? '&' : '?';
 
-      if (!stripeClient) {
-        res.json({
-          configured: false,
-          mode: 'sandbox',
-          sandboxSessionId: `cs_test_protox_support_${tier.amountDollars}_${Date.now()}`,
-          amountDollars: tier.amountDollars,
-          amountCents: tier.unitAmount,
-          currency: 'usd',
-          productId: tier.productId || 'prod_protox_support_sandbox',
-        });
-        return;
-      }
-
       const priceData: Stripe.Checkout.SessionCreateParams.LineItem.PriceData = tier.productId
         ? {
             currency: 'usd',
@@ -156,8 +176,8 @@ async function startServer() {
             currency: 'usd',
             unit_amount: tier.unitAmount,
             product_data: {
-              name: `Support protoX Games (${tier.label})`,
-              description: 'One-time contribution to support protoX Games.',
+              name: `Support ProtoX Games (${tier.label})`,
+              description: 'One-time contribution to support ProtoX Games.',
             },
           };
 
@@ -167,14 +187,16 @@ async function startServer() {
         client_reference_id: uid || undefined,
         payment_intent_data: {
           receipt_email: email || undefined,
-          description: `protoX Games Support (${tier.label})`,
+          description: `ProtoX Games Support (${tier.label})`,
           metadata: {
+            kind: 'support',
             uid: uid || 'guest',
             amountDollars: String(tier.amountDollars),
             productId: tier.productId || '',
           },
         },
         metadata: {
+          kind: 'support',
           uid: uid || 'guest',
           amountDollars: String(tier.amountDollars),
           amountCents: String(tier.unitAmount),
@@ -192,7 +214,7 @@ async function startServer() {
 
       res.json({
         configured: true,
-        mode: 'stripe',
+        kind: 'support',
         url: session.url,
         sessionId: session.id,
         productId: tier.productId || null,
@@ -212,12 +234,12 @@ async function startServer() {
       }
 
       if (!stripeClient) {
-        res.status(400).json({ error: 'Stripe secret key is not configured on this server.' });
+        res.status(503).json({ error: 'Stripe secret key is not configured on this server.' });
         return;
       }
 
       const session = await stripeClient.checkout.sessions.retrieve(sessionId);
-      const isPaid = session.payment_status === 'paid';
+      const isPaid = session.payment_status === 'paid' || session.status === 'complete';
       const amountCents = Number(session.amount_total || session.metadata?.amountCents || 0);
       const amountDollars = Math.round(amountCents / 100);
 
@@ -233,6 +255,79 @@ async function startServer() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to verify Stripe session.';
       res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/feedback', async (req, res) => {
+    try {
+      const body = req.body as {
+        name?: unknown;
+        email?: unknown;
+        message?: unknown;
+        gameTitle?: unknown;
+      };
+
+      const name = sanitizeSingleLine(body.name, 100);
+      const email = sanitizeSingleLine(body.email, 160);
+      const gameTitle = sanitizeSingleLine(body.gameTitle, 120);
+      const message = typeof body.message === 'string' ? body.message.trim().slice(0, 2000) : '';
+
+      if (!name) {
+        res.status(400).json({ error: 'Please enter your name.' });
+        return;
+      }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        res.status(400).json({ error: 'Please enter a valid reply email address.' });
+        return;
+      }
+      if (message.length < 3) {
+        res.status(400).json({ error: 'Please enter a comment or feedback message.' });
+        return;
+      }
+
+      const subject = gameTitle
+        ? `ProtoX Games Feedback (${gameTitle}) from ${name}`
+        : `ProtoX Games Feedback from ${name}`;
+      const bodyLines = [
+        `From: ${name} <${email}>`,
+        gameTitle ? `Game: ${gameTitle}` : null,
+        '',
+        message,
+      ]
+        .filter((line) => line !== null)
+        .join('\n');
+
+      const mailtoUrl = `mailto:${FEEDBACK_RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines)}`;
+
+      let deliveredViaEmail = false;
+      const resendApiKey = process.env.RESEND_API_KEY?.trim() || '';
+      if (resendApiKey) {
+        const emailRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: process.env.RESEND_FROM_EMAIL?.trim() || 'ProtoX Games Feedback <onboarding@resend.dev>',
+            to: [FEEDBACK_RECIPIENT],
+            reply_to: email,
+            subject,
+            text: bodyLines,
+          }),
+        });
+        deliveredViaEmail = emailRes.ok;
+      }
+
+      res.json({
+        ok: true,
+        deliveredViaEmail,
+        recipient: FEEDBACK_RECIPIENT,
+        mailtoUrl,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unable to process feedback.';
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -257,11 +352,11 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`protoX Games server running on http://0.0.0.0:${PORT}`);
+    console.log(`ProtoX Games server running on http://0.0.0.0:${PORT}`);
   });
 }
 
 startServer().catch((err) => {
-  console.error('Failed to start protoX Games server:', err);
+  console.error('Failed to start ProtoX Games server:', err);
   process.exit(1);
 });
