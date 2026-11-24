@@ -105,13 +105,35 @@ class AppErrorBoundary extends Component<{ children: React.ReactNode }, ErrorBou
 /* ============================================================================
    CLIENT ROUTER HELPERS
    ============================================================================ */
-type ParsedRoute = { view: AppViewMode; slug?: string };
+type ParsedRoute = { view: AppViewMode; slug?: string; categorySlug?: string };
+
+const PRODUCTION_ORIGIN = 'https://protox-games.pages.dev';
+const DEFAULT_OG_IMAGE = `${PRODUCTION_ORIGIN}/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp`;
+const OFFICIAL_LOGO_URL = `${PRODUCTION_ORIGIN}/favicon-192x192.png`;
+
+const CATEGORY_SLUG_LABELS: Record<string, string> = {
+  action: 'Action',
+  racing: 'Racing',
+  adventure: 'Adventure',
+  puzzle: 'Puzzle',
+  sports: 'Sports',
+  multiplayer: 'Multiplayer',
+  arcade: 'Arcade',
+  '3d': '3D',
+  strategy: 'Strategy',
+  simulation: 'Simulation',
+  shooting: 'Shooting',
+};
 
 function parsePathname(pathname: string): ParsedRoute {
   const clean = pathname.replace(/\/+$/, '') || '/';
   if (clean === '/discover') return { view: 'discover' };
   if (clean === '/games' || clean === '/explore') return { view: 'games' };
   if (clean === '/categories') return { view: 'categories' };
+  if (clean.startsWith('/category/')) {
+    const categorySlug = decodeURIComponent(clean.slice('/category/'.length)).toLowerCase();
+    if (categorySlug) return { view: 'games', categorySlug };
+  }
   if (clean === '/trending') return { view: 'trending' };
   if (clean === '/favorites') return { view: 'favorites' };
   if (clean === '/recent') return { view: 'recent' };
@@ -250,37 +272,221 @@ function ProtoXGamesApp() {
     if (route.view !== 'game') {
       setPlayerFullscreen(false);
     }
-  }, [route.view]);
+    if (route.categorySlug && CATEGORY_SLUG_LABELS[route.categorySlug]) {
+      setActiveGenre(CATEGORY_SLUG_LABELS[route.categorySlug]);
+    } else if (route.view === 'games' && !route.categorySlug && pathname === '/games') {
+      // Preserve explicit All Games navigation
+    }
+  }, [route.view, route.categorySlug, pathname]);
 
-  // Dynamic Google Search Console SEO & OpenGraph / Canonical / VideoGame JSON-LD
+  // Production Canonical SEO, Robots, OpenGraph, Twitter Cards & Schema.org JSON-LD
   useEffect(() => {
-    const canonicalUrl = `${window.location.origin}${window.location.pathname}`;
-    const defaultTitle = 'ProtoX Games – Play 2,900+ Free Instant Browser Games';
+    const defaultTitle = 'ProtoX Games – Play Free Online Games';
     const defaultDesc =
-      'Play 2,900+ free HTML5 and WebGL games instantly on ProtoX Games. Zero downloads, zero ads—just pure browser gaming across action, racing, puzzle, and arcade.';
+      'Discover thousands of free online games at ProtoX Games. Explore action, adventure, racing, puzzle, sports and arcade games. Play instantly in your browser.';
+    const indexableRobots = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
 
     let pageTitle = defaultTitle;
     let pageDesc = defaultDesc;
-    let pageImage = `${window.location.origin}/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp`;
+    let canonicalUrl = `${PRODUCTION_ORIGIN}/`;
+    let pageImage = DEFAULT_OG_IMAGE;
+    let robotsDirective = indexableRobots;
+
+    const baseNodes: Record<string, unknown>[] = [
+      {
+        '@type': 'WebSite',
+        '@id': `${PRODUCTION_ORIGIN}/#website`,
+        name: 'ProtoX Games',
+        url: `${PRODUCTION_ORIGIN}/`,
+        description: defaultDesc,
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: `${PRODUCTION_ORIGIN}/games?q={search_term_string}`,
+          'query-input': 'required name=search_term_string',
+        },
+      },
+      {
+        '@type': 'Organization',
+        '@id': `${PRODUCTION_ORIGIN}/#organization`,
+        name: 'ProtoX Games',
+        url: `${PRODUCTION_ORIGIN}/`,
+        logo: {
+          '@type': 'ImageObject',
+          url: OFFICIAL_LOGO_URL,
+          width: 192,
+          height: 192,
+        },
+      },
+    ];
+
+    const breadcrumbItems: { '@type': string; position: number; name: string; item: string }[] = [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${PRODUCTION_ORIGIN}/` },
+    ];
+    let extraNodes: Record<string, unknown>[] = [];
 
     if (route.view === 'game' && activeRouteGame) {
-      pageTitle = `Play ${activeRouteGame.title} Free Online – ProtoX Games`;
-      pageDesc = activeRouteGame.description.slice(0, 158) || defaultDesc;
+      canonicalUrl = `${PRODUCTION_ORIGIN}/game/${activeRouteGame.slug}`;
+      pageTitle = `Play ${activeRouteGame.title} Free Online – ${activeRouteGame.category} | ProtoX Games`;
+      const cleanGameDesc = activeRouteGame.description.replace(/\s+/g, ' ').trim();
+      pageDesc =
+        cleanGameDesc.length > 155 ? `${cleanGameDesc.slice(0, 152).trim()}...` : cleanGameDesc || defaultDesc;
       if (activeRouteGame.thumb) pageImage = activeRouteGame.thumb;
+
+      const catSlug = activeRouteGame.category.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      breadcrumbItems.push({
+        '@type': 'ListItem',
+        position: 2,
+        name: activeRouteGame.category,
+        item: CATEGORY_SLUG_LABELS[catSlug]
+          ? `${PRODUCTION_ORIGIN}/category/${catSlug}`
+          : `${PRODUCTION_ORIGIN}/categories`,
+      });
+      breadcrumbItems.push({
+        '@type': 'ListItem',
+        position: 3,
+        name: activeRouteGame.title,
+        item: canonicalUrl,
+      });
+
+      extraNodes = [
+        {
+          '@type': 'WebPage',
+          '@id': `${canonicalUrl}#webpage`,
+          url: canonicalUrl,
+          name: pageTitle,
+          description: pageDesc,
+          isPartOf: { '@id': `${PRODUCTION_ORIGIN}/#website` },
+        },
+        {
+          '@type': 'VideoGame',
+          name: activeRouteGame.title,
+          description: pageDesc,
+          genre: activeRouteGame.genres,
+          image: pageImage,
+          url: canonicalUrl,
+          playMode: 'SinglePlayer',
+          applicationCategory: 'Game',
+          operatingSystem: 'Web Browser',
+          publisher: { '@id': `${PRODUCTION_ORIGIN}/#organization` },
+        },
+      ];
+    } else if (route.view === 'game' && !activeRouteGame) {
+      pageTitle = 'Game Not Found – ProtoX Games';
+      pageDesc = 'The requested ProtoX Games title could not be found.';
+      canonicalUrl = `${PRODUCTION_ORIGIN}/`;
+      robotsDirective = 'noindex, nofollow';
+    } else if (route.view === 'games' && route.categorySlug && CATEGORY_SLUG_LABELS[route.categorySlug]) {
+      const catLabel = CATEGORY_SLUG_LABELS[route.categorySlug];
+      canonicalUrl = `${PRODUCTION_ORIGIN}/category/${route.categorySlug}`;
+      pageTitle = `${catLabel} Games – Play Free Online | ProtoX Games`;
+      pageDesc = `Play free online ${catLabel.toLowerCase()} games at ProtoX Games. Instant HTML5 and WebGL browser gameplay with zero downloads.`;
+      breadcrumbItems.push(
+        { '@type': 'ListItem', position: 2, name: 'Categories', item: `${PRODUCTION_ORIGIN}/categories` },
+        { '@type': 'ListItem', position: 3, name: `${catLabel} Games`, item: canonicalUrl }
+      );
+      extraNodes = [
+        {
+          '@type': 'CollectionPage',
+          '@id': `${canonicalUrl}#webpage`,
+          url: canonicalUrl,
+          name: pageTitle,
+          description: pageDesc,
+          isPartOf: { '@id': `${PRODUCTION_ORIGIN}/#website` },
+        },
+      ];
     } else if (route.view === 'games') {
-      pageTitle = 'Explore All Browser Games – ProtoX Games';
+      canonicalUrl = `${PRODUCTION_ORIGIN}/games`;
+      pageTitle = 'Explore Free Online Games – Full Catalog | ProtoX Games';
+      pageDesc =
+        'Browse over 2,900 free HTML5 and WebGL browser games at ProtoX Games. Filter by genre, popularity, or newest arrivals and play instantly.';
+      breadcrumbItems.push({ '@type': 'ListItem', position: 2, name: 'All Games', item: canonicalUrl });
+      extraNodes = [
+        {
+          '@type': 'CollectionPage',
+          '@id': `${canonicalUrl}#webpage`,
+          url: canonicalUrl,
+          name: pageTitle,
+          description: pageDesc,
+          isPartOf: { '@id': `${PRODUCTION_ORIGIN}/#website` },
+        },
+      ];
     } else if (route.view === 'categories') {
+      canonicalUrl = `${PRODUCTION_ORIGIN}/categories`;
       pageTitle = 'Game Categories – Action, Racing, Puzzle | ProtoX Games';
+      pageDesc =
+        'Browse free online game categories on ProtoX Games including Action, Racing, Adventure, Puzzle, Sports, Multiplayer, Strategy, and Arcade.';
+      breadcrumbItems.push({ '@type': 'ListItem', position: 2, name: 'Categories', item: canonicalUrl });
+      extraNodes = [
+        {
+          '@type': 'CollectionPage',
+          '@id': `${canonicalUrl}#webpage`,
+          url: canonicalUrl,
+          name: pageTitle,
+          description: pageDesc,
+          isPartOf: { '@id': `${PRODUCTION_ORIGIN}/#website` },
+        },
+      ];
     } else if (route.view === 'trending') {
-      pageTitle = 'Trending Web Games – ProtoX Games';
+      canonicalUrl = `${PRODUCTION_ORIGIN}/trending`;
+      pageTitle = 'Trending Online Games – Popular Picks | ProtoX Games';
+      pageDesc =
+        'Play the most popular and trending free browser games on ProtoX Games. Discover top HTML5 and WebGL hits instantly.';
+      breadcrumbItems.push({ '@type': 'ListItem', position: 2, name: 'Trending Games', item: canonicalUrl });
+      extraNodes = [
+        {
+          '@type': 'CollectionPage',
+          '@id': `${canonicalUrl}#webpage`,
+          url: canonicalUrl,
+          name: pageTitle,
+          description: pageDesc,
+          isPartOf: { '@id': `${PRODUCTION_ORIGIN}/#website` },
+        },
+      ];
     } else if (route.view === 'leaderboard') {
+      canonicalUrl = `${PRODUCTION_ORIGIN}/leaderboard`;
       pageTitle = 'Top Games Leaderboard – ProtoX Games';
-    } else if (route.view === 'favorites') {
-      pageTitle = 'Favorite Browser Games – ProtoX Games';
-    } else if (route.view === 'recent') {
-      pageTitle = 'Recently Played Games – ProtoX Games';
-    } else if (route.view === 'profile') {
-      pageTitle = 'Player Profile & Support – ProtoX Games';
+      pageDesc =
+        'View top-ranked instant browser games on ProtoX Games across action, puzzle, racing, and arcade categories.';
+      breadcrumbItems.push({ '@type': 'ListItem', position: 2, name: 'Leaderboard', item: canonicalUrl });
+      extraNodes = [
+        {
+          '@type': 'WebPage',
+          '@id': `${canonicalUrl}#webpage`,
+          url: canonicalUrl,
+          name: pageTitle,
+          description: pageDesc,
+          isPartOf: { '@id': `${PRODUCTION_ORIGIN}/#website` },
+        },
+      ];
+    } else if (
+      route.view === 'favorites' ||
+      route.view === 'recent' ||
+      route.view === 'settings' ||
+      route.view === 'profile' ||
+      route.view === 'discover'
+    ) {
+      robotsDirective = 'noindex, follow';
+      canonicalUrl =
+        route.view === 'discover' ? `${PRODUCTION_ORIGIN}/` : `${PRODUCTION_ORIGIN}/${route.view}`;
+      const viewTitles: Record<string, string> = {
+        favorites: 'Favorite Games – ProtoX Games',
+        recent: 'Recently Played Games – ProtoX Games',
+        settings: 'Settings – ProtoX Games',
+        profile: 'Player Profile – ProtoX Games',
+        discover: defaultTitle,
+      };
+      pageTitle = viewTitles[route.view] || defaultTitle;
+    } else {
+      extraNodes = [
+        {
+          '@type': 'WebPage',
+          '@id': `${PRODUCTION_ORIGIN}/#webpage`,
+          url: `${PRODUCTION_ORIGIN}/`,
+          name: pageTitle,
+          description: pageDesc,
+          isPartOf: { '@id': `${PRODUCTION_ORIGIN}/#website` },
+        },
+      ];
     }
 
     document.title = pageTitle;
@@ -293,6 +499,16 @@ function ProtoXGamesApp() {
         return link;
       },
       (el) => ((el as HTMLLinkElement).href = canonicalUrl)
+    );
+
+    upsertHeadTag(
+      'meta[name="robots"]',
+      () => {
+        const m = document.createElement('meta');
+        m.name = 'robots';
+        return m;
+      },
+      (el) => ((el as HTMLMetaElement).content = robotsDirective)
     );
 
     upsertHeadTag(
@@ -388,33 +604,24 @@ function ProtoXGamesApp() {
       );
     }
 
-    const existingGameLd = document.head.querySelector('#protox-game-jsonld');
-    if (route.view === 'game' && activeRouteGame) {
-      const ldEl = existingGameLd || document.createElement('script');
-      ldEl.id = 'protox-game-jsonld';
-      ldEl.setAttribute('type', 'application/ld+json');
-      ldEl.textContent = JSON.stringify({
-        '@context': 'https://schema.org',
-        '@type': 'VideoGame',
-        name: activeRouteGame.title,
-        description: pageDesc,
-        genre: activeRouteGame.genres,
-        image: pageImage,
-        url: canonicalUrl,
-        playMode: 'SinglePlayer',
-        applicationCategory: 'Game',
-        operatingSystem: 'Web Browser',
-        offers: {
-          '@type': 'Offer',
-          price: '0',
-          priceCurrency: 'USD',
+    // Update the single managed Schema.org JSON-LD container (zero duplicates)
+    const ldEl =
+      document.head.querySelector('#protox-route-jsonld') || document.createElement('script');
+    ldEl.id = 'protox-route-jsonld';
+    ldEl.setAttribute('type', 'application/ld+json');
+    ldEl.textContent = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@graph': [
+        ...baseNodes,
+        ...extraNodes,
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: breadcrumbItems,
         },
-      });
-      if (!existingGameLd) document.head.appendChild(ldEl);
-    } else if (existingGameLd) {
-      existingGameLd.remove();
-    }
-  }, [route.view, activeRouteGame]);
+      ],
+    });
+    if (!ldEl.parentNode) document.head.appendChild(ldEl);
+  }, [route.view, route.categorySlug, activeRouteGame]);
 
   // Check Stripe config
   useEffect(() => {
@@ -776,7 +983,16 @@ function ProtoXGamesApp() {
   const handleBrowseGenre = useCallback(
     (genre: string) => {
       setActiveGenre(genre);
-      navigate('/games');
+      if (genre === 'All Games') {
+        navigate('/games');
+      } else {
+        const slug = genre.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        if (CATEGORY_SLUG_LABELS[slug]) {
+          navigate(`/category/${slug}`);
+        } else {
+          navigate('/games');
+        }
+      }
     },
     [navigate]
   );
@@ -979,10 +1195,18 @@ function ProtoXGamesApp() {
 
               {(route.view === 'games' || route.view === 'trending') && (
                 <ExploreCatalogView
-                  title={route.view === 'trending' ? 'Trending Games' : 'Explore All Games'}
+                  title={
+                    route.view === 'trending'
+                      ? 'Trending Games'
+                      : activeGenre !== 'All Games'
+                      ? `${activeGenre} Games`
+                      : 'Explore All Games'
+                  }
                   subtitle={
                     route.view === 'trending'
                       ? 'Highest-rated instant browser experiences sorted by popularity.'
+                      : activeGenre !== 'All Games'
+                      ? `Play free online ${activeGenre.toLowerCase()} games instantly in your browser.`
                       : `Browse all ${games.length.toLocaleString()} browser titles with instant search and filtering.`
                   }
                   games={games}

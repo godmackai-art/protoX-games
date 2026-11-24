@@ -1,10 +1,17 @@
-interface CFContext {
-  request: Request;
-}
+export async function onRequestGet() {
+  const body = [
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /api/',
+    'Disallow: /profile',
+    'Disallow: /favorites',
+    'Disallow: /recent',
+    'Disallow: /settings',
+    '',
+    'Sitemap: https://protox-games.pages.dev/sitemap.xml',
+    '',
+  ].join('\n');
 
-export async function onRequestGet({ request }: CFContext) {
-  const origin = new URL(request.url).origin;
-  const body = `User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`;
   return new Response(body, {
     status: 200,
     headers: {

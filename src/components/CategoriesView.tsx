@@ -39,6 +39,7 @@ export function CategoriesView({ games, onSelectCategory }: CategoriesViewProps)
   const categoryCounts = useMemo(() => {
     return CATEGORY_CATALOG.map((cat) => ({
       ...cat,
+      slug: cat.id.toLowerCase(),
       count: games.filter((g) => matchesGenreGroup(g, cat.id)).length,
     })).filter((c) => c.count > 0);
   }, [games]);
@@ -58,10 +59,14 @@ export function CategoriesView({ games, onSelectCategory }: CategoriesViewProps)
         {categoryCounts.map((cat) => {
           const Icon = cat.icon;
           return (
-            <button
+            <a
               key={cat.id}
-              type="button"
-              onClick={() => onSelectCategory(cat.id)}
+              href={`/category/${encodeURIComponent(cat.slug)}`}
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                e.preventDefault();
+                onSelectCategory(cat.id);
+              }}
               className="glass-card group relative flex items-center justify-between overflow-hidden rounded-2xl p-5 text-left"
             >
               <div
@@ -82,7 +87,7 @@ export function CategoriesView({ games, onSelectCategory }: CategoriesViewProps)
                 </div>
               </div>
               <ArrowRight className="relative z-10 h-4 w-4 text-[#A1A1B5] transition-transform group-hover:translate-x-1 group-hover:text-white" />
-            </button>
+            </a>
           );
         })}
       </div>

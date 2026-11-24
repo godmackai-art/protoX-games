@@ -26,51 +26,31 @@ export function GameCard({
   onSelect,
   onToggleFavorite,
 }: GameCardProps) {
+  const gameHref = `/game/${game.slug}`;
+
+  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    onSelect(game);
+  };
+
   if (variant === 'tile') {
     return (
       <article className="group relative overflow-hidden rounded-xl border border-white/12 bg-[#101629] transition duration-200 hover:-translate-y-1 hover:border-[#8B5CF6]/65 hover:shadow-xl hover:shadow-[#8B5CF6]/15">
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => onSelect(game)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onSelect(game);
-            }
-          }}
-          className="relative aspect-[16/10] w-full cursor-pointer overflow-hidden text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6]"
+        <a
+          href={gameHref}
+          onClick={handleLinkClick}
+          className="relative block aspect-[16/10] w-full overflow-hidden text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6]"
         >
           <GameThumbnail game={game} hoverZoom />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#080B16]/95 via-[#080B16]/30 to-transparent opacity-90 transition-opacity group-hover:opacity-100" />
 
-          {/* Top Left Trending / Favorite Top Right */}
-          <div className="absolute top-2 right-2 left-2 flex items-center justify-between gap-2">
-            {isTrending ? (
-              <span className="inline-flex items-center gap-1 rounded-md bg-[#080B16]/80 px-2 py-0.5 text-[10px] font-semibold text-[#A78BFA] backdrop-blur-sm">
-                <Flame className="h-3 w-3 text-[#06B6D4]" />
-                Hot
-              </span>
-            ) : (
-              <span />
-            )}
-
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavorite(game);
-              }}
-              aria-label={isFavorite ? `Remove ${game.title} from favorites` : `Favorite ${game.title}`}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border backdrop-blur-md transition ${
-                isFavorite
-                  ? 'border-[#8B5CF6]/65 bg-[#8B5CF6]/35 text-white opacity-100'
-                  : 'border-white/15 bg-[#080B16]/70 text-white/80 opacity-0 group-hover:opacity-100 hover:text-white'
-              }`}
-            >
-              <Heart className={`h-3.5 w-3.5 ${isFavorite ? 'fill-[#A78BFA] text-[#A78BFA]' : ''}`} />
-            </button>
-          </div>
+          {isTrending && (
+            <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-md bg-[#080B16]/80 px-2 py-0.5 text-[10px] font-semibold text-[#A78BFA] backdrop-blur-sm">
+              <Flame className="h-3 w-3 text-[#06B6D4]" />
+              Hot
+            </span>
+          )}
 
           {/* Center Hover Play Affordance */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
@@ -92,7 +72,21 @@ export function GameCard({
               </span>
             </div>
           </div>
-        </div>
+        </a>
+
+        {/* Favorite Toggle (sibling outside anchor for valid HTML) */}
+        <button
+          type="button"
+          onClick={() => onToggleFavorite(game)}
+          aria-label={isFavorite ? `Remove ${game.title} from favorites` : `Favorite ${game.title}`}
+          className={`absolute top-2 right-2 z-20 flex h-8 w-8 items-center justify-center rounded-lg border backdrop-blur-md transition ${
+            isFavorite
+              ? 'border-[#8B5CF6]/65 bg-[#8B5CF6]/35 text-white opacity-100'
+              : 'border-white/15 bg-[#080B16]/70 text-white/80 opacity-0 group-hover:opacity-100 hover:text-white'
+          }`}
+        >
+          <Heart className={`h-3.5 w-3.5 ${isFavorite ? 'fill-[#A78BFA] text-[#A78BFA]' : ''}`} />
+        </button>
       </article>
     );
   }
@@ -111,25 +105,18 @@ export function GameCard({
         className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-[#8B5CF6]/0 via-transparent to-[#06B6D4]/0 opacity-0 transition-opacity duration-300 group-hover:from-[#8B5CF6]/25 group-hover:to-[#06B6D4]/20 group-hover:opacity-100"
       />
 
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onSelect(game)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onSelect(game);
-          }
-        }}
-        className="relative z-10 flex h-full cursor-pointer flex-col text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6]"
+      <a
+        href={gameHref}
+        onClick={handleLinkClick}
+        className="relative z-10 flex h-full flex-col text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6]"
       >
         {/* Thumbnail Window */}
         <div className={`relative w-full overflow-hidden bg-[#101629] ${compact ? 'aspect-[16/10]' : 'aspect-[16/10]'}`}>
           <GameThumbnail game={game} hoverZoom />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#080B16]/90 via-[#080B16]/15 to-transparent" />
 
-          {/* Top Controls Overlay */}
-          <div className="absolute top-2.5 right-2.5 left-2.5 flex items-center justify-between gap-2">
+          {/* Top Badge */}
+          <div className="absolute top-2.5 left-2.5">
             {isTrending ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-[#8B5CF6]/45 bg-[#080B16]/75 px-2.5 py-1 text-[11px] font-semibold text-[#A78BFA] backdrop-blur-md">
                 <Flame className="h-3 w-3 text-[#06B6D4]" />
@@ -140,22 +127,6 @@ export function GameCard({
                 {game.category}
               </span>
             )}
-
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavorite(game);
-              }}
-              aria-label={isFavorite ? `Remove ${game.title} from favorites` : `Favorite ${game.title}`}
-              className={`flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-md transition ${
-                isFavorite
-                  ? 'border-[#8B5CF6]/60 bg-[#8B5CF6]/30 text-white'
-                  : 'border-white/15 bg-[#080B16]/60 text-white/75 hover:border-white/30 hover:text-white'
-              }`}
-            >
-              <Heart className={`h-4 w-4 ${isFavorite ? 'fill-[#A78BFA] text-[#A78BFA]' : ''}`} />
-            </button>
           </div>
 
           {/* Bottom Rating / Play Count inside media frame */}
@@ -193,7 +164,21 @@ export function GameCard({
             </span>
           </div>
         </div>
-      </div>
+      </a>
+
+      {/* Favorite Toggle (sibling outside anchor for valid HTML) */}
+      <button
+        type="button"
+        onClick={() => onToggleFavorite(game)}
+        aria-label={isFavorite ? `Remove ${game.title} from favorites` : `Favorite ${game.title}`}
+        className={`absolute top-2.5 right-2.5 z-20 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-md transition ${
+          isFavorite
+            ? 'border-[#8B5CF6]/60 bg-[#8B5CF6]/30 text-white'
+            : 'border-white/15 bg-[#080B16]/60 text-white/75 hover:border-white/30 hover:text-white'
+        }`}
+      >
+        <Heart className={`h-4 w-4 ${isFavorite ? 'fill-[#A78BFA] text-[#A78BFA]' : ''}`} />
+      </button>
     </motion.article>
   );
 }

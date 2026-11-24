@@ -1,3 +1,4 @@
+import type React from 'react';
 import {
   Brain,
   Car,
@@ -34,35 +35,37 @@ interface SidebarProps {
 
 const FEED_ITEMS: {
   id: AppViewMode;
+  href: string;
   label: string;
   icon: typeof Home;
   badgeKey?: 'favorites' | 'recent';
 }[] = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'recent', label: 'Recently Played', icon: Clock, badgeKey: 'recent' },
-  { id: 'games', label: 'All Games', icon: Gamepad2 },
-  { id: 'trending', label: 'Trending', icon: Flame },
-  { id: 'discover', label: 'Updated & Top', icon: Compass },
-  { id: 'favorites', label: 'Favorites', icon: Heart, badgeKey: 'favorites' },
-  { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
+  { id: 'home', href: '/', label: 'Home', icon: Home },
+  { id: 'recent', href: '/recent', label: 'Recently Played', icon: Clock, badgeKey: 'recent' },
+  { id: 'games', href: '/games', label: 'All Games', icon: Gamepad2 },
+  { id: 'trending', href: '/trending', label: 'Trending', icon: Flame },
+  { id: 'discover', href: '/discover', label: 'Updated & Top', icon: Compass },
+  { id: 'favorites', href: '/favorites', label: 'Favorites', icon: Heart, badgeKey: 'favorites' },
+  { id: 'leaderboard', href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
 ];
 
 const SIDEBAR_GENRES: {
   id: string;
+  slug: string;
   label: string;
   icon: typeof Swords;
 }[] = [
-  { id: 'Action', label: 'Action', icon: Swords },
-  { id: 'Racing', label: 'Racing', icon: Car },
-  { id: 'Shooting', label: 'Shooting', icon: Crosshair },
-  { id: 'Multiplayer', label: 'Multiplayer', icon: Users },
-  { id: 'Puzzle', label: 'Puzzle', icon: Puzzle },
-  { id: 'Adventure', label: 'Adventure', icon: Compass },
-  { id: 'Sports', label: 'Sports', icon: Trophy },
-  { id: 'Arcade', label: 'Arcade', icon: Gamepad2 },
-  { id: '3D', label: '3D Games', icon: Layers },
-  { id: 'Strategy', label: 'Strategy', icon: Brain },
-  { id: 'Simulation', label: 'Simulation', icon: Sparkles },
+  { id: 'Action', slug: 'action', label: 'Action', icon: Swords },
+  { id: 'Racing', slug: 'racing', label: 'Racing', icon: Car },
+  { id: 'Shooting', slug: 'shooting', label: 'Shooting', icon: Crosshair },
+  { id: 'Multiplayer', slug: 'multiplayer', label: 'Multiplayer', icon: Users },
+  { id: 'Puzzle', slug: 'puzzle', label: 'Puzzle', icon: Puzzle },
+  { id: 'Adventure', slug: 'adventure', label: 'Adventure', icon: Compass },
+  { id: 'Sports', slug: 'sports', label: 'Sports', icon: Trophy },
+  { id: 'Arcade', slug: 'arcade', label: 'Arcade', icon: Gamepad2 },
+  { id: '3D', slug: '3d', label: '3D Games', icon: Layers },
+  { id: 'Strategy', slug: 'strategy', label: 'Strategy', icon: Brain },
+  { id: 'Simulation', slug: 'simulation', label: 'Simulation', icon: Sparkles },
 ];
 
 export function Sidebar({
@@ -78,6 +81,12 @@ export function Sidebar({
 }: SidebarProps) {
   const totalSupportedDollars = Math.round(Number(profile?.totalSupportedCents || 0) / 100);
 
+  const spaClick = (fn: () => void) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    fn();
+  };
+
   return (
     <aside
       aria-label="Platform navigation"
@@ -86,7 +95,7 @@ export function Sidebar({
       }`}
     >
       <div className="no-scrollbar flex-1 overflow-y-auto px-2.5 py-3">
-        {/* Main CrazyGames Feed Links */}
+        {/* Main Feed Links */}
         <div className="space-y-0.5">
           {FEED_ITEMS.map((item) => {
             const Icon = item.icon;
@@ -100,17 +109,17 @@ export function Sidebar({
                 : 0;
 
             return (
-              <button
+              <a
                 key={item.id}
-                type="button"
+                href={item.href}
                 title={collapsed ? item.label : undefined}
-                onClick={() => {
+                onClick={spaClick(() => {
                   if (item.id === 'games') {
                     onSelectGenre('All Games');
                   } else {
                     onNavigateView(item.id);
                   }
-                }}
+                })}
                 className={`relative flex w-full items-center rounded-xl py-2.5 text-left text-xs font-semibold transition-colors ${
                   collapsed ? 'justify-center px-0' : 'justify-between gap-2.5 px-3'
                 } ${isActive ? 'text-white' : 'text-[#A1A1B5] hover:bg-white/5 hover:text-white'}`}
@@ -133,7 +142,7 @@ export function Sidebar({
                     {count}
                   </span>
                 )}
-              </button>
+              </a>
             );
           })}
         </div>
@@ -141,7 +150,7 @@ export function Sidebar({
         {/* Hairline Separator */}
         <div className="my-3 border-t border-white/10" />
 
-        {/* CrazyGames Genres Rail */}
+        {/* Categories Rail (Crawlable Links) */}
         <div className="space-y-0.5">
           {!collapsed && (
             <p className="px-3 pb-1 text-[11px] font-semibold tracking-wide text-[#A1A1B5]">
@@ -152,11 +161,11 @@ export function Sidebar({
             const Icon = genre.icon;
             const isGenreActive = activeView === 'games' && activeGenre === genre.id;
             return (
-              <button
+              <a
                 key={genre.id}
-                type="button"
+                href={`/category/${genre.slug}`}
                 title={collapsed ? genre.label : undefined}
-                onClick={() => onSelectGenre(genre.id)}
+                onClick={spaClick(() => onSelectGenre(genre.id))}
                 className={`flex w-full items-center rounded-xl py-2 text-left text-xs font-medium transition-colors ${
                   collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
                 } ${
@@ -171,14 +180,14 @@ export function Sidebar({
                   }`}
                 />
                 {!collapsed && <span className="truncate">{genre.label}</span>}
-              </button>
+              </a>
             );
           })}
 
-          <button
-            type="button"
+          <a
+            href="/categories"
             title={collapsed ? 'All Categories' : undefined}
-            onClick={() => onNavigateView('categories')}
+            onClick={spaClick(() => onNavigateView('categories'))}
             className={`flex w-full items-center rounded-xl py-2 text-left text-xs font-medium transition-colors ${
               collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
             } ${
@@ -189,12 +198,12 @@ export function Sidebar({
           >
             <Grid className="h-4 w-4 shrink-0 text-[#A78BFA]" />
             {!collapsed && <span className="truncate">All Categories</span>}
-          </button>
+          </a>
 
-          <button
-            type="button"
+          <a
+            href="/settings"
             title={collapsed ? 'Settings' : undefined}
-            onClick={() => onNavigateView('settings')}
+            onClick={spaClick(() => onNavigateView('settings'))}
             className={`flex w-full items-center rounded-xl py-2 text-left text-xs font-medium transition-colors ${
               collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
             } ${
@@ -205,7 +214,7 @@ export function Sidebar({
           >
             <Settings className="h-4 w-4 shrink-0 text-[#A1A1B5]" />
             {!collapsed && <span className="truncate">Settings</span>}
-          </button>
+          </a>
         </div>
       </div>
 

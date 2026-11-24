@@ -6,9 +6,15 @@ interface GameThumbnailProps {
   game: NormalizedGame;
   className?: string;
   hoverZoom?: boolean;
+  priority?: boolean;
 }
 
-export function GameThumbnail({ game, className = '', hoverZoom = true }: GameThumbnailProps) {
+export function GameThumbnail({
+  game,
+  className = '',
+  hoverZoom = true,
+  priority = false,
+}: GameThumbnailProps) {
   const [imgFailed, setImgFailed] = useState(false);
 
   const paletteMap: Record<string, string> = {
@@ -23,13 +29,15 @@ export function GameThumbnail({ game, className = '', hoverZoom = true }: GameTh
   };
 
   const gradientClass = paletteMap[game.category] || 'from-[#1D1B4B] via-[#101629] to-[#080B16]';
+  const descriptiveAlt = `${game.title} – Free Online ${game.category} Game on ProtoX Games`;
 
   if (game.thumb && !imgFailed) {
     return (
       <img
         src={game.thumb}
-        alt={game.title}
-        loading="lazy"
+        alt={descriptiveAlt}
+        loading={priority ? 'eager' : 'lazy'}
+        decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setImgFailed(true)}
         className={`h-full w-full object-cover ${

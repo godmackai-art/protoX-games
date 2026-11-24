@@ -21,7 +21,10 @@ export function Footer({ onNavigateView, onOpenSupport, onContactFeedback }: Foo
             <div className="flex items-center gap-2.5">
               <img
                 src="/favicon.webp"
-                alt="ProtoX Games mark"
+                alt="ProtoX Games official logo"
+                width={36}
+                height={36}
+                decoding="async"
                 className="h-9 w-9 rounded-xl border border-[#8B5CF6]/40 object-cover"
               />
               <span className="font-display text-lg font-bold text-white">
@@ -38,31 +41,56 @@ export function Footer({ onNavigateView, onOpenSupport, onContactFeedback }: Foo
               <p className="text-xs font-semibold text-white">Platform</p>
               <ul className="mt-3 space-y-2 text-xs text-[#A1A1B5]">
                 <li>
-                  <button
-                    type="button"
-                    onClick={() => onNavigateView('home')}
+                  <a
+                    href="/"
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                      e.preventDefault();
+                      onNavigateView('home');
+                    }}
                     className="hover:text-white"
                   >
                     Home
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button
-                    type="button"
-                    onClick={() => onNavigateView('games')}
+                  <a
+                    href="/games"
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                      e.preventDefault();
+                      onNavigateView('games');
+                    }}
                     className="hover:text-white"
                   >
                     Explore Games
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button
-                    type="button"
-                    onClick={() => onNavigateView('categories')}
+                  <a
+                    href="/categories"
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                      e.preventDefault();
+                      onNavigateView('categories');
+                    }}
                     className="hover:text-white"
                   >
                     Categories
-                  </button>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/trending"
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                      e.preventDefault();
+                      onNavigateView('trending');
+                    }}
+                    className="hover:text-white"
+                  >
+                    Trending Games
+                  </a>
                 </li>
                 <li>
                   <button

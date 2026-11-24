@@ -3,65 +3,101 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ProtoX Games – Play 2,900+ Free Instant Browser Games</title>
+    <title>ProtoX Games – Play Free Online Games</title>
     <meta
       name="description"
-      content="Play 2,900+ free HTML5 and WebGL games instantly on ProtoX Games. Zero downloads, zero ads—just pure browser gaming across action, racing, puzzle, and arcade."
+      content="Discover thousands of free online games at ProtoX Games. Explore action, adventure, racing, puzzle, sports and arcade games. Play instantly in your browser."
     />
     <meta
       name="robots"
       content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
     />
+    <link rel="canonical" href="https://protox-games.pages.dev/" />
+
+    <!-- Google Search & Device Favicons (Official ProtoX Games Icon) -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" />
     <link rel="icon" type="image/webp" href="/favicon.webp" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.webp" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#080B16" />
 
     <!-- OpenGraph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="ProtoX Games" />
-    <meta property="og:title" content="ProtoX Games – Play 2,900+ Free Instant Browser Games" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="https://protox-games.pages.dev/" />
+    <meta property="og:title" content="ProtoX Games – Play Free Online Games" />
     <meta
       property="og:description"
-      content="Play 2,900+ free HTML5 and WebGL games instantly on ProtoX Games. Zero downloads, zero ads—just pure browser gaming across action, racing, puzzle, and arcade."
+      content="Discover thousands of free online games at ProtoX Games. Explore action, adventure, racing, puzzle, sports and arcade games. Play instantly in your browser."
     />
-    <meta property="og:image" content="/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp" />
+    <meta
+      property="og:image"
+      content="https://protox-games.pages.dev/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp"
+    />
+    <meta property="og:image:alt" content="ProtoX Games – Free Instant Browser Gaming Hub" />
 
     <!-- Twitter / X Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="ProtoX Games – Play 2,900+ Free Instant Browser Games" />
+    <meta name="twitter:title" content="ProtoX Games – Play Free Online Games" />
     <meta
       name="twitter:description"
-      content="Play 2,900+ free HTML5 and WebGL games instantly on ProtoX Games. Zero downloads, zero ads—just pure browser gaming across action, racing, puzzle, and arcade."
+      content="Discover thousands of free online games at ProtoX Games. Explore action, adventure, racing, puzzle, sports and arcade games. Play instantly in your browser."
     />
-    <meta name="twitter:image" content="/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp" />
+    <meta
+      name="twitter:image"
+      content="https://protox-games.pages.dev/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp"
+    />
 
-    <!-- Schema.org Structured Data for Google Search Console -->
-    <script type="application/ld+json">
+    <!-- Schema.org Structured Data (Managed single JSON-LD container) -->
+    <script id="protox-route-jsonld" type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@graph": [
           {
             "@type": "WebSite",
+            "@id": "https://protox-games.pages.dev/#website",
             "name": "ProtoX Games",
-            "description": "Instant browser gaming arcade featuring 2,900+ free HTML5 and WebGL games with zero ads and zero downloads.",
+            "url": "https://protox-games.pages.dev/",
+            "description": "Discover thousands of free online games at ProtoX Games. Play action, adventure, racing, puzzle, sports and arcade games instantly in your browser.",
             "potentialAction": {
               "@type": "SearchAction",
-              "target": "/games?q={search_term_string}",
+              "target": "https://protox-games.pages.dev/games?q={search_term_string}",
               "query-input": "required name=search_term_string"
             }
           },
           {
-            "@type": "WebApplication",
+            "@type": "Organization",
+            "@id": "https://protox-games.pages.dev/#organization",
             "name": "ProtoX Games",
-            "applicationCategory": "GameApplication",
-            "operatingSystem": "All",
-            "description": "Play 2,900+ free HTML5 and WebGL games instantly on ProtoX Games with zero downloads and zero ads.",
-            "offers": {
-              "@type": "Offer",
-              "price": "0",
-              "priceCurrency": "USD"
+            "url": "https://protox-games.pages.dev/",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://protox-games.pages.dev/favicon-192x192.png",
+              "width": 192,
+              "height": 192
             }
+          },
+          {
+            "@type": "WebPage",
+            "@id": "https://protox-games.pages.dev/#webpage",
+            "url": "https://protox-games.pages.dev/",
+            "name": "ProtoX Games – Play Free Online Games",
+            "description": "Discover thousands of free online games at ProtoX Games. Explore action, adventure, racing, puzzle, sports and arcade games. Play instantly in your browser.",
+            "isPartOf": { "@id": "https://protox-games.pages.dev/#website" }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://protox-games.pages.dev/"
+              }
+            ]
           }
         ]
       }

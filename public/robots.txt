@@ -1,4 +1,9 @@
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /profile
+Disallow: /favorites
+Disallow: /recent
+Disallow: /settings
 
-Sitemap: /sitemap.xml
+Sitemap: https://protox-games.pages.dev/sitemap.xml

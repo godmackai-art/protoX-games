@@ -136,7 +136,10 @@ export function TopNavbar({
             <div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-[#8B5CF6]/45 bg-[#101629] shadow-md shadow-[#8B5CF6]/25">
               <img
                 src="/favicon.webp"
-                alt="ProtoX Games icon"
+                alt="ProtoX Games official logo"
+                width={36}
+                height={36}
+                decoding="async"
                 className="h-full w-full object-cover"
               />
             </div>

@@ -91,7 +91,7 @@ async function startServer() {
     res.json({ ok: true, service: 'protox-games' });
   });
 
-  app.get('/sitemap.xml', (req, res) => {
+  app.get('/sitemap.xml', (_req, res) => {
     const sitemapPath = isProduction
       ? path.resolve(__dirname, 'dist', 'sitemap.xml')
       : path.resolve(__dirname, 'public', 'sitemap.xml');
@@ -99,21 +99,26 @@ async function startServer() {
       res.status(404).send('Sitemap not found.');
       return;
     }
-    const rawXml = fs.readFileSync(sitemapPath, 'utf8');
-    const host = req.get('x-forwarded-host') || req.get('host') || `localhost:${PORT}`;
-    const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
-    const origin = sanitizeBaseOrigin(`${proto}://${host}`);
-    const rewritten = rawXml.replace(/https:\/\/protox-games\.pages\.dev/g, origin);
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    res.send(rewritten);
+    res.sendFile(sitemapPath);
   });
 
-  app.get('/robots.txt', (req, res) => {
-    const host = req.get('x-forwarded-host') || req.get('host') || `localhost:${PORT}`;
-    const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
-    const origin = sanitizeBaseOrigin(`${proto}://${host}`);
+  app.get('/robots.txt', (_req, res) => {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.send(`User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`);
+    res.send(
+      [
+        'User-agent: *',
+        'Allow: /',
+        'Disallow: /api/',
+        'Disallow: /profile',
+        'Disallow: /favorites',
+        'Disallow: /recent',
+        'Disallow: /settings',
+        '',
+        'Sitemap: https://protox-games.pages.dev/sitemap.xml',
+        '',
+      ].join('\n')
+    );
   });
 
   app.get('/google25ec37742473ff7b.html', (_req, res) => {

@@ -1,21 +1,31 @@
 {
   "name": "ProtoX Games",
-  "short_name": "ProtoX",
-  "description": "Play 2,900+ free instant HTML5 and WebGL browser games on ProtoX Games.",
+  "short_name": "ProtoX Games",
+  "description": "Discover thousands of free online games at ProtoX Games. Explore action, adventure, racing, puzzle, sports and arcade games.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#080B16",
   "theme_color": "#080B16",
   "icons": [
     {
-      "src": "/favicon.webp",
-      "sizes": "512x512",
-      "type": "image/webp",
+      "src": "/favicon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/apple-touch-icon.webp",
-      "sizes": "512x512",
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.webp",
+      "sizes": "192x192",
       "type": "image/webp"
     }
   ]

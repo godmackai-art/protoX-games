@@ -1,3 +1,4 @@
+import type React from 'react';
 import { Compass, Flame, Gamepad2, Play, Star } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { NormalizedGame } from '../types/game';
@@ -30,6 +31,11 @@ const DESKTOP_QUICK_GENRES = [
   'Strategy',
 ];
 
+function genreToHref(genre: string): string {
+  if (genre === 'All Games') return '/games';
+  return `/category/${encodeURIComponent(genre.toLowerCase())}`;
+}
+
 export function HeroSection({
   totalGames,
   totalCategories,
@@ -42,29 +48,35 @@ export function HeroSection({
   onSelectGenre,
   onLaunchFeatured,
 }: HeroSectionProps) {
+  const spaClick = (fn: () => void) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    fn();
+  };
+
   return (
     <>
       {/* Desktop CrazyGames Showcase Mosaic (lg+) */}
       <section aria-label="Featured games showcase" className="hidden space-y-4 lg:block">
-        {/* Quick Genre Chips Strip */}
+        {/* Quick Genre Chips Strip (Crawlable Links) */}
         <div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-0.5">
-          <button
-            type="button"
-            onClick={onDiscoverTrending}
+          <a
+            href="/trending"
+            onClick={spaClick(onDiscoverTrending)}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[#8B5CF6]/45 bg-[#8B5CF6]/20 px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap text-white transition hover:bg-[#8B5CF6]/30"
           >
             <Flame className="h-3.5 w-3.5 text-[#06B6D4]" />
             Trending
-          </button>
+          </a>
           {DESKTOP_QUICK_GENRES.map((genre) => (
-            <button
+            <a
               key={genre}
-              type="button"
-              onClick={() => onSelectGenre(genre)}
+              href={genreToHref(genre)}
+              onClick={spaClick(() => onSelectGenre(genre))}
               className="shrink-0 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap text-[#A1A1B5] transition hover:border-white/25 hover:bg-white/10 hover:text-white"
             >
               {genre}
-            </button>
+            </a>
           ))}
         </div>
 
@@ -74,14 +86,16 @@ export function HeroSection({
           <div className="glass-panel-deep relative col-span-6 flex min-h-[300px] flex-col justify-between overflow-hidden rounded-2xl p-6">
             <img
               src="/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp"
-              alt="ProtoX Games arcade showcase"
+              alt="ProtoX Games – Play Free Online Action, Adventure, Racing, Puzzle, and Arcade Games"
+              fetchPriority="high"
+              decoding="async"
               className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-55"
             />
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#080B16]/95 via-[#080B16]/75 to-[#080B16]/35" />
 
             <div className="relative z-10 flex items-center justify-between gap-3">
               <span className="text-xs font-semibold text-[#06B6D4]">
-                {totalGames.toLocaleString()} Playable Titles · {totalCategories} Genres · Zero Ads
+                {totalGames.toLocaleString()} Playable Titles · {totalCategories} Genres · Zero Downloads
               </span>
               {featuredGame && (
                 <span className="inline-flex items-center gap-1 font-mono text-xs text-amber-300">
@@ -99,30 +113,30 @@ export function HeroSection({
                 </span>
               </h1>
               <p className="mt-2 max-w-md text-xs leading-relaxed text-[#A1A1B5] xl:text-sm">
-                Instant HTML5 & WebGL browser gaming. Pick a tile or dive into the full catalog with zero downloads.
+                Discover thousands of free online games at ProtoX Games across action, adventure, racing, puzzle, sports, and arcade. Play instantly in your browser.
               </p>
             </div>
 
             <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 pt-2">
               <div className="flex items-center gap-2.5">
                 {featuredGame && (
-                  <button
-                    type="button"
-                    onClick={() => onLaunchFeatured(featuredGame)}
+                  <a
+                    href={`/game/${featuredGame.slug}`}
+                    onClick={spaClick(() => onLaunchFeatured(featuredGame))}
                     className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#06B6D4] px-4 py-2 text-xs font-semibold whitespace-nowrap text-white shadow-lg shadow-[#8B5CF6]/30 transition hover:brightness-110"
                   >
                     <Play className="h-3.5 w-3.5 fill-current" />
                     Play {featuredGame.title}
-                  </button>
+                  </a>
                 )}
-                <button
-                  type="button"
-                  onClick={onExploreGames}
+                <a
+                  href="/games"
+                  onClick={spaClick(onExploreGames)}
                   className="glass-card inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold whitespace-nowrap text-white hover:border-[#06B6D4]/50"
                 >
                   <Gamepad2 className="h-3.5 w-3.5 text-[#06B6D4]" />
                   All Games
-                </button>
+                </a>
               </div>
               <span className="font-mono text-xs text-[#A1A1B5]">
                 {totalSessions > 0 ? `${totalSessions} runs` : `${favoritesCount} saved`}
@@ -130,16 +144,16 @@ export function HeroSection({
             </div>
           </div>
 
-          {/* Right 3x2 Featured Quick-Play Mosaic */}
+          {/* Right 3x2 Featured Quick-Play Mosaic (Crawlable Links) */}
           <div className="col-span-6 grid grid-cols-3 grid-rows-2 gap-3">
-            {showcaseGames.slice(0, 6).map((game) => (
-              <button
+            {showcaseGames.slice(0, 6).map((game, idx) => (
+              <a
                 key={game.id}
-                type="button"
-                onClick={() => onLaunchFeatured(game)}
+                href={`/game/${game.slug}`}
+                onClick={spaClick(() => onLaunchFeatured(game))}
                 className="group relative overflow-hidden rounded-xl border border-white/12 bg-[#101629] text-left transition duration-200 hover:-translate-y-0.5 hover:border-[#8B5CF6]/65 hover:shadow-lg hover:shadow-[#8B5CF6]/20"
               >
-                <GameThumbnail game={game} hoverZoom />
+                <GameThumbnail game={game} hoverZoom priority={idx < 3} />
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#080B16]/95 via-[#080B16]/25 to-transparent" />
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#06B6D4] text-white shadow-md">
@@ -152,13 +166,13 @@ export function HeroSection({
                   </p>
                   <p className="truncate text-[10px] text-[#A1A1B5]">{game.category}</p>
                 </div>
-              </button>
+              </a>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Mobile Layout Preserved Unchanged (< lg) */}
+      {/* Mobile Layout Preserved (< lg) */}
       <section
         aria-label="Featured arcade showcase"
         className="glass-panel-deep relative overflow-hidden rounded-3xl p-6 sm:p-8 lg:hidden"
@@ -191,27 +205,27 @@ export function HeroSection({
             </h1>
 
             <p className="mt-4 max-w-xl text-sm leading-relaxed text-[#A1A1B5] sm:text-base">
-              Explore thousands of incredible games. Play instantly. No downloads. Just pure gaming.
+              Discover thousands of free online games at ProtoX Games. Explore action, adventure, racing, puzzle, sports, and arcade games instantly in your browser.
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={onExploreGames}
+              <a
+                href="/games"
+                onClick={spaClick(onExploreGames)}
                 className="inline-flex min-h-[48px] items-center gap-2 rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#06B6D4] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[#8B5CF6]/30 transition hover:brightness-110"
               >
                 <Gamepad2 className="h-4 w-4" />
                 Explore Games
-              </button>
+              </a>
 
-              <button
-                type="button"
-                onClick={onDiscoverTrending}
+              <a
+                href="/trending"
+                onClick={spaClick(onDiscoverTrending)}
                 className="glass-card inline-flex min-h-[48px] items-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-white hover:border-[#06B6D4]/50"
               >
                 <Compass className="h-4 w-4 text-[#06B6D4]" />
                 Discover Trending
-              </button>
+              </a>
             </div>
 
             <div className="mt-7 grid grid-cols-3 gap-3">
@@ -245,7 +259,8 @@ export function HeroSection({
             <div className="relative aspect-[16/10] w-full overflow-hidden rounded-3xl border border-white/15 bg-[#101629] shadow-2xl shadow-black/60">
               <img
                 src="/assets/aistudio/Neon_Web_Games_Hub__2__1ce608a6.webp"
-                alt="ProtoX Games cinematic browser showcase"
+                alt="ProtoX Games – Free Instant Browser Games Hub"
+                decoding="async"
                 className="h-full w-full object-cover"
               />
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#080B16] via-[#080B16]/25 to-transparent" />
@@ -272,14 +287,14 @@ export function HeroSection({
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => onLaunchFeatured(featuredGame)}
+                  <a
+                    href={`/game/${featuredGame.slug}`}
+                    onClick={spaClick(() => onLaunchFeatured(featuredGame))}
                     className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#06B6D4] px-4 py-2 text-xs font-semibold text-white shadow-md shadow-[#8B5CF6]/25 transition hover:brightness-110"
                   >
                     <Play className="h-3.5 w-3.5 fill-current" />
                     Play Now
-                  </button>
+                  </a>
                 </div>
               )}
             </div>
