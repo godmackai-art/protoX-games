@@ -81,17 +81,22 @@ export async function onRequestPost({ request, env }: CFContext) {
     const params = new URLSearchParams();
     params.set('mode', 'payment');
     params.set('line_items[0][quantity]', '1');
-    params.set('line_items[0][price_data][currency]', 'usd');
-    params.set('line_items[0][price_data][unit_amount]', String(tier.unitAmount));
 
-    if (productId) {
-      params.set('line_items[0][price_data][product]', productId);
+    if (productId.startsWith('price_')) {
+      params.set('line_items[0][price]', productId);
     } else {
-      params.set('line_items[0][price_data][product_data][name]', `Support ProtoX Games (${tier.label})`);
-      params.set(
-        'line_items[0][price_data][product_data][description]',
-        'One-time contribution to support ProtoX Games.'
-      );
+      params.set('line_items[0][price_data][currency]', 'usd');
+      params.set('line_items[0][price_data][unit_amount]', String(tier.unitAmount));
+
+      if (productId) {
+        params.set('line_items[0][price_data][product]', productId);
+      } else {
+        params.set('line_items[0][price_data][product_data][name]', `Support ProtoX Games (${tier.label})`);
+        params.set(
+          'line_items[0][price_data][product_data][description]',
+          'One-time contribution to support ProtoX Games.'
+        );
+      }
     }
 
     if (email) {
@@ -107,7 +112,6 @@ export async function onRequestPost({ request, env }: CFContext) {
     params.set('metadata[uid]', uid || 'guest');
     params.set('metadata[amountDollars]', String(parsedAmount));
     params.set('metadata[amountCents]', String(tier.unitAmount));
-    params.set('metadata[productId]', productId);
     params.set(
       'success_url',
       `${baseOrigin}${returnPath}${separator}stripe_status=success&session_id={CHECKOUT_SESSION_ID}`

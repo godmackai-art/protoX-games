@@ -183,7 +183,7 @@ export function Footer({ onNavigateView, onOpenSupport, onContactFeedback }: Foo
               )}
               {legalModal === 'terms' && (
                 <p>
-                  All games on ProtoX Games are free and ad-free. Optional support contributions (1$, 10$, 100$) are processed by Stripe Checkout using our registered Stripe Product ID. For assistance or inquiries, contact stevenevel003@gmail.com.
+                  All games on ProtoX Games are free and ad-free. Optional support contributions (1$, 10$, 100$) are processed securely by Stripe Checkout. For assistance or inquiries, contact stevenevel003@gmail.com.
                 </p>
               )}
             </div>

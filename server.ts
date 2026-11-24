@@ -169,19 +169,27 @@ async function startServer() {
       const returnPath = sanitizeReturnPath(body.returnPath);
       const separator = returnPath.includes('?') ? '&' : '?';
 
-      const priceData: Stripe.Checkout.SessionCreateParams.LineItem.PriceData = tier.productId
+      const lineItem: Stripe.Checkout.SessionCreateParams.LineItem = tier.productId.startsWith('price_')
         ? {
-            currency: 'usd',
-            unit_amount: tier.unitAmount,
-            product: tier.productId,
+            price: tier.productId,
+            quantity: 1,
           }
         : {
-            currency: 'usd',
-            unit_amount: tier.unitAmount,
-            product_data: {
-              name: `Support ProtoX Games (${tier.label})`,
-              description: 'One-time contribution to support ProtoX Games.',
-            },
+            price_data: tier.productId
+              ? {
+                  currency: 'usd',
+                  unit_amount: tier.unitAmount,
+                  product: tier.productId,
+                }
+              : {
+                  currency: 'usd',
+                  unit_amount: tier.unitAmount,
+                  product_data: {
+                    name: `Support ProtoX Games (${tier.label})`,
+                    description: 'One-time contribution to support ProtoX Games.',
+                  },
+                },
+            quantity: 1,
           };
 
       const session = await stripeClient.checkout.sessions.create({
@@ -195,7 +203,6 @@ async function startServer() {
             kind: 'support',
             uid: uid || 'guest',
             amountDollars: String(tier.amountDollars),
-            productId: tier.productId || '',
           },
         },
         metadata: {
@@ -203,14 +210,8 @@ async function startServer() {
           uid: uid || 'guest',
           amountDollars: String(tier.amountDollars),
           amountCents: String(tier.unitAmount),
-          productId: tier.productId || '',
         },
-        line_items: [
-          {
-            price_data: priceData,
-            quantity: 1,
-          },
-        ],
+        line_items: [lineItem],
         success_url: `${baseOrigin}${returnPath}${separator}stripe_status=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseOrigin}${returnPath}${separator}stripe_status=cancelled`,
       });
